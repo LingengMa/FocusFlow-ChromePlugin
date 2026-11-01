@@ -645,29 +645,80 @@
     return false;
   }
 
-  /**
-   * Some players (e.g. Chaoxing) have no "next" button in the video; the next
-   * lesson is only in the right-hand chapter directory. Find the highlighted
-   * current section and return the next numbered section in DOM order.
-   */
-  function findSidebarNextControl() {
-    if (findQuiz()?.element) return null;
-    const selector = [
-      'a',
-      '[role="button"]',
-      '[onclick]',
-      'li',
-      '[data-url]',
-      '[data-href]',
-      '[class*="chapter" i]',
-      '[class*="catalog" i]',
-      '[class*="section" i]',
-      '[class*="item" i]',
-      '[class*="list" i]'
-    ].join(',');
+  function sidebarNumberValue(number) {
+    return String(number)
+      .split('.')
+      .reduce((value, part) => value * 1000 + (Number(part) || 0), 0);
+  }
+
+  function sidebarItemCompleted(element) {
+    const text = textOf(element, 240);
+    if (/已完成|completed|finished|done/i.test(text) || /[✓✔]/.test(text)) return true;
+
+    let inspected = 0;
+    for (const node of element.querySelectorAll('[class], [aria-label]')) {
+      if (inspected >= 80) break;
+      inspected += 1;
+      const className = String(node.className || '');
+      if (
+        /(?:^|[\s_-])(?:complete|completed|finished|done|success|checked|check|comp|dui|tick)(?:$|[\s_-])/i.test(className)
+      ) {
+        return true;
+      }
+      if (/完成/.test(node.getAttribute?.('aria-label') || '')) return true;
+    }
+
+    let current = element;
+    for (let depth = 0; depth < 3 && current; depth += 1) {
+      const className = String(current.className || '');
+      if (
+        /(?:^|[\s_-])(?:complete|completed|finished|done|success|checked|comp|pass)(?:$|[\s_-])/i.test(className)
+      ) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function sidebarScrollContainer(element) {
+    let current = element;
+    for (let depth = 0; depth < 10 && current; depth += 1) {
+      if (current === document.body || current === document.documentElement) break;
+      const style = getComputedStyle(current);
+      if (
+        /(auto|scroll|overlay)/.test(style.overflowY) &&
+        current.scrollHeight > current.clientHeight + 20
+      ) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+
+    const candidates = [...document.querySelectorAll(
+      'aside, [class*="sidebar" i], [class*="catalog" i], [class*="chapter" i], [class*="list" i]'
+    )];
+    const scrollable = candidates.filter((node) => {
+      if (!isRendered(node)) return false;
+      const style = getComputedStyle(node);
+      return /(auto|scroll|overlay)/.test(style.overflowY) &&
+        node.scrollHeight > node.clientHeight + 30;
+    });
+    const inner = scrollable.find((node) =>
+      node.getBoundingClientRect().left > window.innerWidth * 0.45
+    ) || scrollable[0];
+    if (inner) return inner;
+
+    // Some platforms let the whole document scroll instead of giving the
+    // directory its own scrollbar. Fall back to the page scroller.
+    const root = document.scrollingElement || document.documentElement;
+    if (root && root.scrollHeight > root.clientHeight + 30) return root;
+    return null;
+  }
+
+  function collectSidebarItems(selector) {
     const byNumber = new Map();
     let scanned = 0;
-
     for (const element of document.querySelectorAll(selector)) {
       if (scanned >= 6000) break;
       scanned += 1;
@@ -682,42 +733,125 @@
       if (element.hasAttribute?.('onclick')) score += 2;
       if (/chapter|catalog|section|item/i.test(String(element.className || ''))) score += 1;
       if (element.getBoundingClientRect().left > window.innerWidth * 0.55) score += 2;
-      // Prefer the smallest clickable node carrying this section label.
       score -= Math.min(3, Math.round(section.text.length / 40));
       const existing = byNumber.get(section.number);
       if (!existing || score > existing.score) {
-        byNumber.set(section.number, { ...section, element, score });
+        byNumber.set(section.number, {
+          ...section,
+          element,
+          score,
+          completed: sidebarItemCompleted(element)
+        });
+      }
+    }
+    return [...byNumber.values()].sort(
+      (a, b) => sidebarNumberValue(a.number) - sidebarNumberValue(b.number)
+    );
+  }
+
+  function findCurrentSidebarItem(items) {
+    const urlMatches = items.filter((item) => sidebarUrlMatchesCurrent(item.element));
+    if (urlMatches.length === 1) return urlMatches[0];
+
+    const stateMatches = items.filter((item) => sidebarState(item.element));
+    if (stateMatches.length === 1) return stateMatches[0];
+
+    const highlightMatches = items.filter((item) => sidebarHasHighlight(item.element));
+    if (highlightMatches.length === 1) return highlightMatches[0];
+    return null;
+  }
+
+  function firstIncompleteAfter(items, currentNumber) {
+    const currentValue = sidebarNumberValue(currentNumber);
+    return items.find((item) =>
+      sidebarNumberValue(item.number) > currentValue &&
+      !item.completed &&
+      !hasLockedAncestor(item.element)
+    ) || null;
+  }
+
+  /**
+   * Some players (e.g. Chaoxing) have no "next" button in the video; the next
+   * lesson is only in the right-hand chapter directory. Find the highlighted
+   * current section and return the first incomplete numbered section after it.
+   * If the list is lazy-rendered, scroll its own container and rescan.
+   */
+  async function findSidebarNextControl() {
+    if (findQuiz()?.element) return null;
+    const selector = [
+      'a',
+      '[role="button"]',
+      '[onclick]',
+      'li',
+      '[data-url]',
+      '[data-href]',
+      '[class*="chapter" i]',
+      '[class*="catalog" i]',
+      '[class*="section" i]',
+      '[class*="item" i]',
+      '[class*="list" i]'
+    ].join(',');
+
+    let items = collectSidebarItems(selector);
+    let current = findCurrentSidebarItem(items);
+    let scroll = null;
+
+    // If the active row is not in the rendered part, walk the directory from
+    // the top until it appears. This handles a sidebar that was reloaded at
+    // scrollTop=0 while the video is further down the course.
+    if (!current) {
+      scroll = sidebarScrollContainer(items[0]?.element || null);
+      if (!scroll) return null;
+      const original = scroll.scrollTop;
+      scroll.scrollTop = 0;
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(180);
+      for (let attempt = 0; attempt < 12 && !current; attempt += 1) {
+        items = collectSidebarItems(selector);
+        current = findCurrentSidebarItem(items);
+        if (current) break;
+        const before = scroll.scrollTop;
+        scroll.scrollTop = Math.min(
+          scroll.scrollHeight,
+          before + Math.max(160, scroll.clientHeight * 0.75)
+        );
+        scroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await sleep(220);
+        if (scroll.scrollTop === before) break;
+      }
+      if (!current) {
+        scroll.scrollTop = original;
+        return null;
       }
     }
 
-    const items = [...byNumber.values()].sort((a, b) => {
-      if (a.element === b.element) return 0;
-      const position = a.element.compareDocumentPosition(b.element);
-      return position & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-    });
-    if (items.length < 2) return null;
+    let next = firstIncompleteAfter(items, current.number);
+    if (next) return next.element;
 
-    const urlIndex = items.findIndex((item) => sidebarUrlMatchesCurrent(item.element));
-    let index = urlIndex;
-    if (index < 0) {
-      const stateIndexes = [];
-      items.forEach((item, itemIndex) => {
-        if (sidebarState(item.element)) stateIndexes.push(itemIndex);
-      });
-      if (stateIndexes.length === 1) index = stateIndexes[0];
-    }
-    if (index < 0) {
-      index = items.findIndex((item) => sidebarHasHighlight(item.element));
-    }
-    if (index < 0 || index >= items.length - 1) return null;
+    scroll = sidebarScrollContainer(current.element) || scroll;
+    if (!scroll) return null;
+    const original = scroll.scrollTop;
 
-    const next = items[index + 1];
-    if (!next || next.number === items[index].number) return null;
-    if (hasLockedAncestor(next.element)) return null;
-    return next.element;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const before = scroll.scrollTop;
+      scroll.scrollTop = Math.min(
+        scroll.scrollHeight,
+        before + Math.max(160, scroll.clientHeight * 0.75)
+      );
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(240);
+
+      items = collectSidebarItems(selector);
+      next = firstIncompleteAfter(items, current.number);
+      if (next) return next.element;
+      if (scroll.scrollTop === before) break;
+    }
+
+    scroll.scrollTop = original;
+    return null;
   }
 
-  function findNextControl() {
+  async function findNextControl() {
     const nextPattern = /^(下一[节集课篇个章讲]|下一个(视频|课程|任务点)?|下节|next(\s+(video|lesson))?|继续(学习|观看|下节)?)/i;
     const candidates = [];
     const seen = new Set();
@@ -978,7 +1112,7 @@
 
   async function executeNext(action) {
     let element = action.localId ? resolveElement(action.localId) : null;
-    if (!element) element = findNextControl();
+    if (!element) element = await findNextControl();
     if (!element) throw new Error('没有找到“下一节”控件。');
     fireClick(element);
     await sleep(600);
