@@ -1,0 +1,10 @@
+/* The HUD lives in a shadow root; this only guarantees a stable host box. */
+#ff-hud-host {
+  all: initial !important;
+  position: fixed !important;
+  left: 16px !important;
+  bottom: 16px !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  contain: layout style !important;
+}

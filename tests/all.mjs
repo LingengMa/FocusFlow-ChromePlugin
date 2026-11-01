@@ -1,0 +1,11 @@
+import './config.test.mjs';
+import './ai-protocol.test.mjs';
+import './planner.test.mjs';
+import './quiz-followup.test.mjs';
+import './course-state.test.mjs';
+import './course-detect.test.mjs';
+import './prompt.test.mjs';
+import './ai-client.test.mjs';
+import './service-worker.test.mjs';
+import './pointer.test.mjs';
+import './self-heal.test.mjs';

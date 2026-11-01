@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FocusFlow</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <img src="../icons/icon48.png" alt="" class="logo">
+        <div>
+          <h1>FocusFlow</h1>
+          <p>AI 网课助手</p>
+        </div>
+      </div>
+      <div class="pill" id="statusPill" data-status="idle">
+        <span class="dot"></span>
+        <span id="statusText">已停止</span>
+      </div>
+    </header>
+
+    <section class="banner hidden" id="setupBanner">
+      <div>
+        <strong>还差一步</strong>
+        <span>配置多模态模型接口后才能开始分析。</span>
+      </div>
+      <button class="link-btn" id="setupBtn">去配置</button>
+    </section>
+
+    <section class="card target-card">
+      <div class="site-mark" id="siteMark">F</div>
+      <div class="target-copy">
+        <div class="target-title" id="targetTitle">当前标签页</div>
+        <div class="target-url" id="targetUrl">打开课程页面后点击开始</div>
+      </div>
+      <button class="icon-btn" id="focusBtn" title="切换到课程标签页" aria-label="切换到课程标签页">↗</button>
+    </section>
+
+    <section class="screenshot-wrap">
+      <img id="shotImage" alt="AI 最近看到的画面" class="screenshot hidden">
+      <div class="shot-empty" id="shotEmpty">
+        <span class="scan"></span>
+        <strong>等待第一帧</strong>
+        <span>启动后显示 AI 最近看到的画面</span>
+      </div>
+      <div class="shot-overlay">
+        <span class="live-dot"></span>
+        <span>最新画面</span>
+        <span class="shot-time" id="shotTime">—</span>
+      </div>
+    </section>
+
+    <section class="card decision-card">
+      <div class="section-head">
+        <span>最新决策</span>
+        <span class="confidence" id="confidence">—</span>
+      </div>
+      <div class="decision-line">
+        <span class="chip" id="stateChip" data-state="unknown">待机</span>
+        <p id="reason">启动后，AI 会在这里解释它看到了什么。</p>
+      </div>
+      <div class="bar"><span id="confBar"></span></div>
+      <div class="quiz-line hidden" id="quizLine"></div>
+      <div class="self-heal hidden" id="selfHealLine"></div>
+    </section>
+
+    <section class="actions">
+      <button class="primary" id="primaryBtn">开始观看当前标签页</button>
+      <button class="secondary" id="analyzeBtn" disabled>立即分析</button>
+    </section>
+
+    <section class="stats">
+      <div><span>轮次</span><strong id="cycleCount">0</strong></div>
+      <div><span>间隔</span><strong id="interval">45s</strong></div>
+      <div><span>Tokens</span><strong id="tokenCount">0</strong></div>
+    </section>
+
+    <section class="diag-row">
+      <button class="link-btn" id="diagBtn">复制页面诊断</button>
+      <span>不含截图 / Cookie / Key</span>
+    </section>
+
+    <section class="card log-card">
+      <div class="section-head">
+        <span>活动记录</span>
+        <button class="link-btn" id="optionsBtn">设置</button>
+      </div>
+      <div class="log" id="logList"><p class="muted">暂无记录</p></div>
+    </section>
+
+    <footer>
+      <span>仅限允许的课程 · 运行中用页面 HUD 停止</span>
+      <span class="shortcut">Alt+Shift+S</span>
+    </footer>
+  </main>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <div class="lightbox hidden" id="lightbox">
+    <button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
+    <img id="lightboxImage" alt="截图大图">
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

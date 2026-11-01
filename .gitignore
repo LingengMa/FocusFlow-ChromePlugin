@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+dist/
+build/
+*.zip
+.chrome-profile/
+demo-shot.png

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FocusFlow 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="brand">
+        <img src="../icons/icon128.png" alt="" class="logo">
+        <div>
+          <div class="eyebrow">CHROME EXTENSION</div>
+          <h1>FocusFlow <span>网课助手</span></h1>
+          <p>定时截屏 · 多模态判断 · 直接操作当前浏览器的登录页面</p>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <span class="save-state" id="saveState">已载入</span>
+        <button class="btn primary" id="saveTop">保存设置</button>
+      </div>
+    </header>
+
+    <div class="welcome hidden" id="welcome">
+      <div>
+        <strong>欢迎使用 FocusFlow</strong>
+        <span>先填写支持图片输入的模型接口，然后打开课程页并点击扩展图标启动。第一次使用建议先开启“演示模式”，确认决策正常后再关闭。</span>
+      </div>
+      <button class="btn ghost small" id="dismissWelcome">知道了</button>
+    </div>
+
+    <main class="layout">
+      <div class="main-col">
+        <section class="card" id="modelSection">
+          <div class="card-head">
+            <div>
+              <div class="kicker">01 · MODEL</div>
+              <h2>模型接入</h2>
+              <p>任何兼容 OpenAI Chat Completions 且接受 <code>image_url</code> 的服务都可以使用。</p>
+            </div>
+            <span class="badge" id="apiBadge">未配置</span>
+          </div>
+
+          <div class="grid two">
+            <label class="field">
+              <span>Base URL</span>
+              <input id="apiBaseUrl" type="url" spellcheck="false" placeholder="https://api.deepseek.com/v1">
+              <small>扩展会自动拼接 <code>/chat/completions</code>。可填本地网关，例如 http://127.0.0.1:3000/v1。</small>
+            </label>
+            <label class="field">
+              <span>模型名称</span>
+              <input id="model" type="text" spellcheck="false" placeholder="deepseek-v4.1-flash">
+              <small>必须是支持视觉输入的多模态模型；模型名以你的服务商为准。</small>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>API Key</span>
+            <div class="input-with-action">
+              <input id="apiKey" type="password" spellcheck="false" autocomplete="off" placeholder="sk-…">
+              <button class="btn ghost small" id="toggleKey" type="button">显示</button>
+            </div>
+            <small>只保存在本机 <code>chrome.storage.local</code>，不会上传到 FocusFlow 的服务器。请求直接从浏览器发往你填写的接口。</small>
+          </label>
+
+          <div class="grid two compact">
+            <label class="field">
+              <span>请求超时（秒）</span>
+              <input id="requestTimeoutSeconds" type="number" min="15" max="300" step="5">
+            </label>
+            <div class="field test-field">
+              <span>连通性</span>
+              <div class="test-row">
+                <button class="btn secondary" id="testBtn" type="button">测试连接</button>
+                <span class="test-result" id="testResult">尚未测试</span>
+              </div>
+              <small>会发送一张 64×64 测试图和一句短提示，验证模型是否支持图片输入。</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="kicker">02 · POLICY</div>
+              <h2>自动化策略</h2>
+              <p>每个动作都可以独立关闭。置信度不足时，AI 必须停下来询问你。</p>
+            </div>
+          </div>
+
+          <div class="toggle-list">
+            <label class="toggle-row">
+              <input type="checkbox" id="autoResume">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自动继续播放</strong><small>检测到视频暂停或被遮挡时恢复播放</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="autoAnswer">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自动选择答案</strong><small>识别弹题、随堂练习和测验，并选择/填写答案</small></span>
+            </label>
+            <label class="toggle-row" id="submitRow">
+              <input type="checkbox" id="autoSubmit">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自动提交答案</strong><small>关闭时只选答案，然后停下来让你核对并提交</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="autoNext">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自动切换下一节</strong><small>视频结束或当前节是 PPT/文档（无视频）时点击“下一节 / 继续学习”</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="focusTarget">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>保持课程页在前台</strong><small>每轮截屏前切回目标标签页；Chrome 只能截取可见标签页</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="hud">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>页面状态浮层</strong><small>在页面左下角显示一个可随时停止的小组件</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="dryRun">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>演示模式（不执行动作）</strong><small>仍然截屏和请求 AI，只记录决策，不点击页面。建议首次使用开启</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="autoStart">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自动启动与无人值守</strong><small>打开课程页/切换回课程页时自动启动，不要求点击扩展图标</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="selfHeal">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自诊断与自动修复</strong><small>连续点击失败时切换视觉/DOM策略，接口限流时自动放慢，答题失败自动换策略重试</small></span>
+            </label>
+          </div>
+
+          <label class="field" style="margin-bottom: 14px;">
+            <span>点击方式</span>
+            <select id="clickMode">
+              <option value="hybrid">视觉坐标 + DOM 兜底（推荐）</option>
+              <option value="vision">仅视觉坐标</option>
+              <option value="dom">仅 DOM 元素（旧模式）</option>
+            </select>
+            <small>视觉坐标由模型框选截图目标，扩展用 CDP 发出真实鼠标点击；需要 <code>debugger</code> 权限。混合模式在坐标点击失败时回退到 DOM。</small>
+          </label>
+
+          <div class="grid three">
+            <label class="field">
+              <span>答题置信度阈值 <output id="confidenceOut">72%</output></span>
+              <input id="confidenceThreshold" type="range" min="30" max="99" step="1">
+              <small>低于阈值时不会提交，改为通知你。</small>
+            </label>
+            <label class="field">
+              <span>截屏间隔（秒）</span>
+              <input id="intervalSeconds" type="number" min="30" max="3600" step="5">
+              <small>Chrome 定时器最小 30 秒；答题/结束事件会额外触发即时分析。</small>
+            </label>
+            <label class="field">
+              <span>单次运行上限（分钟）</span>
+              <input id="maxRuntimeMinutes" type="number" min="5" max="1440" step="5">
+            </label>
+            <label class="field">
+              <span>答题后复查间隔（秒）</span>
+              <input id="quizVerifySeconds" type="number" min="2" max="30" step="1">
+              <small>提交答案后短暂截屏复查；答错继续答，答对或答题框消失后恢复常规截屏间隔。</small>
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label class="field">
+              <span>每轮最多动作数</span>
+              <input id="maxActions" type="number" min="1" max="8" step="1">
+            </label>
+            <label class="field">
+              <span>截图最大宽度（px）</span>
+              <input id="maxImageWidth" type="number" min="640" max="2560" step="80">
+            </label>
+            <label class="field">
+              <span>JPEG 质量</span>
+              <input id="jpegQuality" type="number" min="40" max="95" step="1">
+            </label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="kicker">03 · SCOPE</div>
+              <h2>访问范围与附加规则</h2>
+              <p>默认允许任意 http/https 页面。你可以限制只在自己信任的课程站点运行。</p>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>允许的网站（每行一个，留空 = 不限制）</span>
+            <textarea id="allowedHosts" rows="4" spellcheck="false" placeholder="example.com&#10;*.my-course.edu.cn"></textarea>
+            <small>支持 <code>example.com</code> 和 <code>*.example.com</code>。只匹配 http/https。</small>
+          </label>
+
+          <label class="field">
+            <span>附加系统规则（可选）</span>
+            <textarea id="extraPrompt" rows="4" maxlength="2000" placeholder="例如：如果出现“学习进度确认”弹窗，先点击“继续学习”。"></textarea>
+            <small>会追加到系统提示词。不要在这里放密码或个人信息。</small>
+          </label>
+        </section>
+      </div>
+
+      <aside class="side-col">
+        <section class="card status-card">
+          <div class="kicker">QUICK START</div>
+          <h2>四步开始</h2>
+          <ol class="steps">
+            <li><span>1</span><div><strong>配置模型</strong><small>填写 Base URL、模型名和 Key，点击“测试连接”。</small></div></li>
+            <li><span>2</span><div><strong>打开课程页</strong><small>在 Chrome 里登录并进入视频页面。</small></div></li>
+            <li><span>3</span><div><strong>启动</strong><small>点击扩展图标 → 开始观看当前标签页。</small></div></li>
+            <li><span>4</span><div><strong>保持窗口可见</strong><small>Chrome 只能截取当前窗口的前台标签页；可随时用 Alt+Shift+S 停止。</small></div></li>
+          </ol>
+          <div class="status-line">
+            <span class="live-dot"></span>
+            <span id="runtimeLine">读取运行状态…</span>
+          </div>
+        </section>
+
+        <section class="card safety-card">
+          <div class="kicker">SAFETY</div>
+          <h2>边界与隐私</h2>
+          <ul class="checks">
+            <li>页面文本被当作不可信数据，模型不能执行网页里的“指令”。</li>
+            <li>只允许点击快照中列出的元素；密码框、支付、删除、退课等控件会被拦截。</li>
+            <li>截图和页面文本会发送到你配置的模型服务商，请自行确认其隐私政策。</li>
+            <li>自动答题/提交可能违反课程平台规则；请只在明确允许的场景使用。</li>
+          </ul>
+        </section>
+
+        <section class="card data-card">
+          <div class="kicker">DATA</div>
+          <h2>备份与重置</h2>
+          <p class="side-note">导出不包含 API Key。</p>
+          <div class="stack">
+            <button class="btn secondary" id="exportBtn" type="button">导出设置 JSON</button>
+            <button class="btn secondary" id="importBtn" type="button">导入设置 JSON</button>
+            <button class="btn danger-ghost" id="resetBtn" type="button">恢复默认设置</button>
+            <input type="file" id="importFile" accept="application/json,.json" hidden>
+          </div>
+        </section>
+
+        <section class="card about-card">
+          <img src="../icons/icon48.png" alt="" class="mini-logo">
+          <div>
+            <strong>FocusFlow <span id="aboutVersion">v0.2.0</span></strong>
+            <small>Chrome MV3 · 本地运行 · 无遥测</small>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="savebar">
+      <div>
+        <strong id="saveHint">修改后记得保存</strong>
+        <span>设置保存在本机，立即影响正在运行的会话。</span>
+      </div>
+      <div class="savebar-actions">
+        <span class="save-state" id="saveStateBottom">已载入</span>
+        <button class="btn primary" id="saveBottom">保存设置</button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

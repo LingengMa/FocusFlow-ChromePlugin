@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FocusFlow 演示课 · 认识色彩</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --brand: #0f9f7f;
+      --brand-2: #2563eb;
+      --bg: #f4f7fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.92);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(10px);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark {
+      width: 38px; height: 38px; border-radius: 11px;
+      background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+      display: grid; place-items: center; color: #fff; font-weight: 800;
+    }
+    .brand strong { display: block; font-size: 15px; }
+    .brand span { display: block; color: var(--muted); font-size: 11px; }
+    .header-meta { color: var(--muted); font-size: 12px; }
+    .header-meta b { color: var(--brand); }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 22px;
+      width: min(1280px, calc(100% - 40px));
+      margin: 22px auto 60px;
+      align-items: start;
+    }
+    .video-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #0b1220;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .10);
+    }
+    .video-wrap {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: #020617;
+    }
+    video { width: 100%; height: 100%; display: block; background: #020617; }
+    .video-badge {
+      position: absolute;
+      top: 12px; left: 12px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, .64);
+      color: #e2e8f0;
+      font-size: 10px;
+      backdrop-filter: blur(6px);
+    }
+    .video-badge i { width: 6px; height: 6px; border-radius: 50%; background: #34d399; }
+
+    .lesson-body {
+      padding: 18px 20px 20px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .lesson-body h1 { margin: 0 0 5px; font-size: 22px; letter-spacing: -.02em; }
+    .lesson-body p { margin: 0; color: var(--muted); font-size: 12.5px; }
+    .progress-line { height: 4px; margin-top: 14px; overflow: hidden; border-radius: 999px; background: #eef2f7; }
+    .progress-line span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #0ea5e9, #22c55e); transition: width .2s linear; }
+
+    .side { display: flex; flex-direction: column; gap: 14px; }
+    .panel {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .05);
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 13px; }
+    .lesson-list { display: flex; flex-direction: column; gap: 7px; }
+    .lesson-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      color: var(--ink);
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+    }
+    .lesson-item.active { border-color: #0f9f7f55; background: #0f9f7f0d; }
+    .lesson-item .num {
+      display: grid; place-items: center;
+      flex: 0 0 auto; width: 23px; height: 23px;
+      border-radius: 7px; background: #e2e8f0; color: #475569;
+      font-size: 10px; font-weight: 800;
+    }
+    .lesson-item.active .num { background: var(--brand); color: #fff; }
+    .lesson-item strong { display: block; font-size: 11.5px; }
+    .lesson-item small { display: block; color: var(--muted); font-size: 10px; }
+    .note { margin: 0; color: var(--muted); font-size: 11px; }
+    .note b { color: var(--ink); }
+    .file-row { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .file-row label { font-size: 10.5px; font-weight: 700; color: var(--muted); }
+    input[type=file] { width: 100%; font-size: 10.5px; }
+    .restart {
+      width: 100%; height: 34px; margin-top: 8px;
+      border: 1px solid var(--line); border-radius: 9px; background: #fff;
+      color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+    }
+    .restart:hover { border-color: var(--brand); color: var(--brand); }
+
+    /* Quiz overlay is intentionally a normal DOM modal so the extension can read it. */
+    .quiz-backdrop {
+      position: fixed; inset: 0; z-index: 20;
+      display: grid; place-items: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, .58);
+      backdrop-filter: blur(3px);
+    }
+    .quiz-modal {
+      width: min(540px, 100%);
+      padding: 24px;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 30px 80px rgba(2, 6, 23, .35);
+    }
+    .quiz-eyebrow { color: var(--brand-2); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+    .quiz-modal h2 { margin: 4px 0 4px; font-size: 19px; }
+    .quiz-modal .hint { margin: 0 0 15px; color: var(--muted); font-size: 11.5px; }
+    .question { margin: 0 0 12px; font-weight: 700; font-size: 14px; }
+    .options { display: flex; flex-direction: column; gap: 8px; }
+    .option {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    .option:hover { border-color: #94a3b8; }
+    .option input { accent-color: var(--brand); }
+    .option.correct { border-color: #22c55e; background: #f0fdf4; }
+    .option.wrong { border-color: #ef4444; background: #fef2f2; }
+    .quiz-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+    .submit {
+      height: 36px; padding: 0 16px;
+      border: 0; border-radius: 9px;
+      background: var(--brand); color: #fff;
+      font: inherit; font-size: 12px; font-weight: 800;
+      cursor: pointer;
+    }
+    .quiz-feedback { color: var(--muted); font-size: 11px; }
+    .quiz-feedback.ok { color: #15803d; }
+    .quiz-feedback.bad { color: #b91c1c; }
+    .next-banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      margin-top: 14px; padding: 12px 14px;
+      border: 1px solid #86efac; border-radius: 12px; background: #f0fdf4;
+    }
+    .next-banner strong { display: block; font-size: 12.5px; }
+    .next-banner span { color: #166534; font-size: 11px; }
+    .next {
+      height: 34px; padding: 0 14px;
+      border: 0; border-radius: 8px; background: #15803d; color: #fff;
+      font: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
+      white-space: nowrap;
+    }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; z-index: 30;
+      transform: translateX(-50%);
+      padding: 10px 14px; border-radius: 10px;
+      background: #0f172a; color: #fff; font-size: 12px;
+      box-shadow: 0 12px 30px rgba(2, 6, 23, .3);
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 920px) {
+      main { grid-template-columns: 1fr; }
+      .side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      main { width: calc(100% - 20px); }
+      .side { grid-template-columns: 1fr; }
+      header { padding: 12px 16px; }
+      .header-meta { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="mark">F</div>
+      <div>
+        <strong>FocusFlow 演示课</strong>
+        <span>多模态网课自动化 · 测试页面</span>
+      </div>
+    </div>
+    <div class="header-meta">学习进度 <b id="progressText">0%</b> · 演示模式</div>
+  </header>
+
+  <main>
+    <section>
+      <div class="video-card">
+        <div class="video-wrap">
+          <video id="video" controls playsinline preload="metadata">
+            <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
+            <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+          </video>
+          <div class="video-badge"><i></i><span id="videoState">等待播放</span></div>
+        </div>
+        <div class="lesson-body">
+          <h1 id="lessonTitle">第 1 节 · 色彩与视觉节奏</h1>
+          <p id="lessonDesc">本节通过一段花卉影像，观察色彩的层次与运动节奏。播放到第 5 秒会出现随堂练习。</p>
+          <div class="progress-line"><span id="progressBar"></span></div>
+          <div class="next-banner hidden" id="nextBanner">
+            <div>
+              <strong>本节已完成</strong>
+              <span>下一节将继续观察光影变化。</span>
+            </div>
+            <button class="next" id="nextBtn">下一节：光影与层次</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h2>课程目录</h2>
+        <div class="lesson-list">
+          <button class="lesson-item active" data-lesson="0">
+            <span class="num">01</span>
+            <span><strong>色彩与视觉节奏</strong><small>含 1 道随堂练习 · 约 30 秒</small></span>
+          </button>
+          <button class="lesson-item" data-lesson="1">
+            <span class="num">02</span>
+            <span><strong>光影与层次</strong><small>含 1 道随堂练习 · 约 30 秒</small></span>
+          </button>
+          <button class="lesson-item" data-lesson="2">
+            <span class="num">03</span>
+            <span><strong>构图与留白</strong><small>本节无练习</small></span>
+          </button>
+        </div>
+        <button class="restart" id="restartBtn">从头开始本节</button>
+      </section>
+
+      <section class="panel">
+        <h2>演示说明</h2>
+        <p class="note">1. 启动 FocusFlow，保持此页为前台。<br>2. 视频播放到 <b>5 秒</b>会暂停并弹出答题框。<br>3. 视频结束会出现 <b>下一节</b> 按钮。<br>4. 也可以载入本地 MP4 离线测试。</p>
+        <div class="file-row">
+          <label for="localVideo">载入本地 MP4</label>
+          <input type="file" id="localVideo" accept="video/mp4,video/webm">
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div class="quiz-backdrop hidden" id="quizBackdrop">
+    <div class="quiz-modal" role="dialog" aria-modal="true" aria-labelledby="quizTitle">
+      <div class="quiz-eyebrow">随堂练习 · 单选题</div>
+      <h2 id="quizTitle">检查一下理解</h2>
+      <p class="hint">答对后视频会自动继续；答错可以重试。AI 需要读取题目并选择正确答案。</p>
+      <p class="question" id="questionText">第 1 题：在继续播放之前，最合理的操作是什么？</p>
+      <div class="options" id="optionList">
+        <label class="option"><input type="radio" name="quiz" value="a"><span>A. 直接跳过题目</span></label>
+        <label class="option"><input type="radio" name="quiz" value="b"><span>B. 阅读题目并选择正确答案</span></label>
+        <label class="option"><input type="radio" name="quiz" value="c"><span>C. 关闭整个浏览器</span></label>
+      </div>
+      <div class="quiz-actions">
+        <button class="submit" id="submitQuiz">提交答案</button>
+        <span class="quiz-feedback" id="quizFeedback">等待选择…</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const video = document.getElementById('video');
+      const progressText = document.getElementById('progressText');
+      const progressBar = document.getElementById('progressBar');
+      const videoState = document.getElementById('videoState');
+      const quizBackdrop = document.getElementById('quizBackdrop');
+      const optionList = document.getElementById('optionList');
+      const quizFeedback = document.getElementById('quizFeedback');
+      const submitQuiz = document.getElementById('submitQuiz');
+      const nextBanner = document.getElementById('nextBanner');
+      const nextBtn = document.getElementById('nextBtn');
+      const lessonTitle = document.getElementById('lessonTitle');
+      const lessonDesc = document.getElementById('lessonDesc');
+      const restartBtn = document.getElementById('restartBtn');
+      const localVideo = document.getElementById('localVideo');
+
+      const lessons = [
+        { title: '第 1 节 · 色彩与视觉节奏', desc: '本节通过一段花卉影像，观察色彩的层次与运动节奏。播放到第 5 秒会出现随堂练习。', quiz: '在继续播放之前，最合理的操作是什么？', answer: 'b' },
+        { title: '第 2 节 · 光影与层次', desc: '本节关注画面中的明暗变化，以及光线如何塑造空间。', quiz: '观察画面时，下面哪一项最有助于理解光影？', answer: 'b' },
+        { title: '第 3 节 · 构图与留白', desc: '最后一节没有随堂练习。视频结束后可以重新开始演示。', quiz: '', answer: '' }
+      ];
+
+      let lessonIndex = 0;
+      let quizShown = false;
+      let quizDone = false;
+
+      function setState(text) { videoState.textContent = text; }
+
+      function resetLesson(index) {
+        lessonIndex = index;
+        quizShown = false;
+        quizDone = false;
+        quizBackdrop.classList.add('hidden');
+        nextBanner.classList.add('hidden');
+        lessonTitle.textContent = lessons[index].title;
+        lessonDesc.textContent = lessons[index].desc;
+        document.querySelectorAll('.lesson-item').forEach((item, i) => {
+          item.classList.toggle('active', i === index);
+        });
+        try { video.currentTime = 0; } catch { /* metadata may not be ready yet */ }
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+        setState('等待播放');
+        const q = lessons[index].quiz;
+        document.getElementById('questionText').textContent = q
+          ? `第 ${index + 1} 题：${q}`
+          : '本节无练习';
+        optionList.style.display = q ? 'flex' : 'none';
+        submitQuiz.style.display = q ? 'inline-block' : 'none';
+        quizFeedback.textContent = q ? '等待选择…' : '本节无练习';
+        quizFeedback.className = 'quiz-feedback';
+        nextBtn.textContent = index < lessons.length - 1
+          ? `下一节：${lessons[index + 1].title.split(' · ').slice(1).join(' · ')}`
+          : '重新开始演示';
+        document.querySelectorAll('input[name="quiz"]').forEach((input) => {
+          input.checked = false;
+          input.closest('.option').classList.remove('correct', 'wrong');
+        });
+        if (q) {
+          const labels = optionList.querySelectorAll('.option span');
+          if (index === 0) {
+            labels[0].textContent = 'A. 直接跳过题目';
+            labels[1].textContent = 'B. 阅读题目并选择正确答案';
+            labels[2].textContent = 'C. 关闭整个浏览器';
+          } else {
+            labels[0].textContent = 'A. 只看画面中央';
+            labels[1].textContent = 'B. 比较亮部与暗部的过渡';
+            labels[2].textContent = 'C. 忽略背景';
+          }
+          const values = ['a', 'b', 'c'];
+          optionList.querySelectorAll('input').forEach((input, i) => { input.value = values[i]; });
+        }
+      }
+
+      function showQuiz() {
+        if (!lessons[lessonIndex].quiz || quizDone) return;
+        video.pause();
+        quizShown = true;
+        quizBackdrop.classList.remove('hidden');
+        setState('随堂练习');
+      }
+
+      function continueVideo() {
+        quizBackdrop.classList.add('hidden');
+        quizDone = true;
+        setState('播放中');
+        video.play().catch(() => setState('请手动播放'));
+      }
+
+      video.addEventListener('timeupdate', () => {
+        if (video.duration) {
+          const pct = Math.min(100, (video.currentTime / video.duration) * 100);
+          progressBar.style.width = `${pct}%`;
+          progressText.textContent = `${Math.round(pct)}%`;
+        }
+        if (!quizShown && !quizDone && lessons[lessonIndex].quiz && video.currentTime >= 5) {
+          showQuiz();
+        }
+      });
+
+      video.addEventListener('play', () => setState('播放中'));
+      video.addEventListener('pause', () => {
+        if (!quizShown && !video.ended) setState('已暂停');
+      });
+      video.addEventListener('ended', () => {
+        setState('本节结束');
+        progressBar.style.width = '100%';
+        progressText.textContent = '100%';
+        nextBanner.classList.remove('hidden');
+      });
+
+      submitQuiz.addEventListener('click', () => {
+        if (!lessons[lessonIndex].quiz) return;
+        const checked = document.querySelector('input[name="quiz"]:checked');
+        if (!checked) {
+          quizFeedback.textContent = '请先选择一个答案。';
+          quizFeedback.className = 'quiz-feedback bad';
+          return;
+        }
+        const correct = lessons[lessonIndex].answer;
+        const chosen = checked.value;
+        optionList.querySelectorAll('.option').forEach((option) => {
+          const input = option.querySelector('input');
+          option.classList.toggle('correct', input.value === correct);
+          option.classList.toggle('wrong', input.value === chosen && chosen !== correct);
+        });
+        if (chosen === correct) {
+          quizFeedback.textContent = '回答正确，继续播放。';
+          quizFeedback.className = 'quiz-feedback ok';
+          setTimeout(continueVideo, 450);
+        } else {
+          quizFeedback.textContent = '还不对，再读一遍题目后重试。';
+          quizFeedback.className = 'quiz-feedback bad';
+        }
+      });
+
+      nextBtn.addEventListener('click', () => {
+        const nextIndex = Math.min(lessons.length - 1, lessonIndex + 1);
+        if (nextIndex === lessonIndex) {
+          resetLesson(0);
+          showToast('已回到第 1 节');
+          video.play().catch(() => {});
+          return;
+        }
+        resetLesson(nextIndex);
+        showToast(`已切换到${lessons[nextIndex].title}`);
+        video.play().catch(() => {});
+      });
+
+      document.querySelectorAll('.lesson-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const index = Number(item.dataset.lesson) || 0;
+          resetLesson(index);
+          video.play().catch(() => {});
+        });
+      });
+
+      restartBtn.addEventListener('click', () => {
+        resetLesson(lessonIndex);
+        video.play().catch(() => {});
+      });
+
+      localVideo.addEventListener('change', () => {
+        const file = localVideo.files && localVideo.files[0];
+        if (!file) return;
+        video.src = URL.createObjectURL(file);
+        video.load();
+        quizDone = false;
+        quizShown = false;
+        quizBackdrop.classList.add('hidden');
+        setState('本地视频已载入');
+        video.play().catch(() => {});
+      });
+
+      let toastTimer = null;
+      function showToast(message) {
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+        const node = document.createElement('div');
+        node.className = 'toast';
+        node.textContent = message;
+        document.body.appendChild(node);
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => node.remove(), 2600);
+      }
+
+      resetLesson(0);
+      video.play().catch(() => setState('点击播放开始'));
+    })();
+  </script>
+</body>
+</html>
