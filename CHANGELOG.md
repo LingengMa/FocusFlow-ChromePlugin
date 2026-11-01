@@ -2,6 +2,21 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.5] - 2026-11-02
+
+### Added
+
+- Chapter-directory scrolling: the sidebar's own scroll container is walked
+  from top to bottom (with short waits for lazy rendering) until the current
+  section and the first subsequent incomplete section are found.
+- Completed sections are skipped when choosing the next lesson.
+
+### Fixed
+
+- A directory that only renders the visible rows no longer causes a false
+  “course complete”. If the next incomplete section is below the fold, it is
+  discovered by scrolling the sidebar and then clicked.
+
 ## [0.2.4] - 2026-11-02
 
 ### Fixed
