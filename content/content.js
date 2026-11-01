@@ -436,6 +436,7 @@
         let value = 0;
         if (control.group === 'quiz') value += 100;
         if (/下一|next|继续|提交|确定|播放|暂停|play|pause|submit|continue/i.test(control.label)) value += 30;
+        if (/^\d+(?:\.\d+)+\s+\S/.test(control.label)) value += 8;
         if (control.group === 'player') value += 15;
         if (control.checked) value += 4;
         if (control.disabled) value -= 20;
@@ -552,6 +553,161 @@
     element.click();
   }
 
+  function isRendered(element) {
+    if (!element || !element.isConnected) return false;
+    const style = getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2;
+  }
+
+  function hasLockedAncestor(element) {
+    let current = element;
+    for (let depth = 0; depth < 5 && current; depth += 1) {
+      const className = String(current.className || '');
+      if (
+        isDisabled(current) ||
+        /(?:^|[\s_-])(?:locked?|disabled|not-?open|no-?open)(?:$|[\s_-])/i.test(className)
+      ) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function sidebarSectionLabel(element) {
+    const text = textOf(element, 100).replace(/\s+/g, ' ').trim();
+    if (!text || text.length > 100) return null;
+    const match = text.match(/^(\d+(?:\.\d+)+)\s*[、.．]?\s*(\S.{0,70})$/);
+    if (!match) return null;
+    return { number: match[1], title: match[2].trim(), text };
+  }
+
+  function sidebarState(element) {
+    let current = element;
+    for (let depth = 0; depth < 5 && current; depth += 1) {
+      const className = String(current.className || '');
+      if (
+        /(?:^|[\s_-])(?:active|current|selected|cur|focus|highlight|select)(?:$|[\s_-])/i.test(className) ||
+        current.getAttribute?.('aria-current') === 'true' ||
+        current.getAttribute?.('aria-selected') === 'true'
+      ) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function sidebarUrlMatchesCurrent(element) {
+    let href = element.getAttribute?.('href') || element.getAttribute?.('data-url') || '';
+    if (!href) {
+      const anchor = element.closest?.('a[href]');
+      href = anchor?.getAttribute('href') || '';
+    }
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
+    try {
+      const target = new URL(href, location.href);
+      if (target.href === location.href) return true;
+      const current = new URLSearchParams(location.search);
+      for (const [key, value] of current) {
+        if (value && target.searchParams.get(key) === value) return true;
+      }
+    } catch {
+      // ignore malformed sidebar hrefs
+    }
+    return false;
+  }
+
+  function sidebarHasHighlight(element) {
+    let current = element;
+    for (let depth = 0; depth < 3 && current; depth += 1) {
+      const style = getComputedStyle(current);
+      const background = String(style.backgroundColor || '');
+      if (
+        background &&
+        !/rgba?\(0,\s*0,\s*0,\s*0\)|transparent|rgb\(255,\s*255,\s*255\)/i.test(background)
+      ) {
+        const rect = current.getBoundingClientRect();
+        if (rect.width >= 120 && rect.width <= 460 && rect.height >= 18 && rect.height <= 110) {
+          return true;
+        }
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  /**
+   * Some players (e.g. Chaoxing) have no "next" button in the video; the next
+   * lesson is only in the right-hand chapter directory. Find the highlighted
+   * current section and return the next numbered section in DOM order.
+   */
+  function findSidebarNextControl() {
+    if (findQuiz()?.element) return null;
+    const selector = [
+      'a',
+      '[role="button"]',
+      '[onclick]',
+      'li',
+      '[data-url]',
+      '[data-href]',
+      '[class*="chapter" i]',
+      '[class*="catalog" i]',
+      '[class*="section" i]',
+      '[class*="item" i]',
+      '[class*="list" i]'
+    ].join(',');
+    const byNumber = new Map();
+    let scanned = 0;
+
+    for (const element of document.querySelectorAll(selector)) {
+      if (scanned >= 6000) break;
+      scanned += 1;
+      if (!isRendered(element) || hasLockedAncestor(element)) continue;
+      const section = sidebarSectionLabel(element);
+      if (!section) continue;
+      const tag = element.tagName;
+      const role = element.getAttribute?.('role') || '';
+      let score = 0;
+      if (tag === 'A') score += 4;
+      if (role === 'button') score += 2;
+      if (element.hasAttribute?.('onclick')) score += 2;
+      if (/chapter|catalog|section|item/i.test(String(element.className || ''))) score += 1;
+      if (element.getBoundingClientRect().left > window.innerWidth * 0.55) score += 2;
+      // Prefer the smallest clickable node carrying this section label.
+      score -= Math.min(3, Math.round(section.text.length / 40));
+      const existing = byNumber.get(section.number);
+      if (!existing || score > existing.score) {
+        byNumber.set(section.number, { ...section, element, score });
+      }
+    }
+
+    const items = [...byNumber.values()].sort((a, b) => {
+      if (a.element === b.element) return 0;
+      const position = a.element.compareDocumentPosition(b.element);
+      return position & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+    if (items.length < 2) return null;
+
+    let index = items.findIndex((item) => sidebarState(item.element));
+    if (index < 0) {
+      index = items.findIndex((item) => sidebarUrlMatchesCurrent(item.element));
+    }
+    if (index < 0) {
+      index = items.findIndex((item) => sidebarHasHighlight(item.element));
+    }
+    if (index < 0 || index >= items.length - 1) return null;
+
+    const next = items[index + 1];
+    if (!next || next.number === items[index].number) return null;
+    if (hasLockedAncestor(next.element)) return null;
+    return next.element;
+  }
+
   function findNextControl() {
     const nextPattern = /^(下一[节集课篇个章讲]|下一个(视频|课程|任务点)?|下节|next(\s+(video|lesson))?|继续(学习|观看|下节)?)/i;
     const candidates = [];
@@ -636,7 +792,7 @@
     }
 
     candidates.sort((a, b) => (b.score - a.score) || (a.area - b.area));
-    return candidates[0]?.element || fallbackByPoint;
+    return candidates[0]?.element || fallbackByPoint || findSidebarNextControl();
   }
 
   function findSubmitControl() {

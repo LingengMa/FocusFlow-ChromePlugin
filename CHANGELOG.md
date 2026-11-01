@@ -2,6 +2,16 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.2] - 2026-11-02
+
+### Fixed
+
+- A completed video with no top “下一节” button is no longer treated as the
+  end of the course. The extension now finds the highlighted section in the
+  right-hand chapter directory and clicks the next numbered section (e.g.
+  1.4 → 1.5), including a DOM fallback when the model does not click it.
+- The sidebar fallback never runs while an active quiz is visible.
+
 ## [0.2.1] - 2026-11-02
 
 ### Fixed
