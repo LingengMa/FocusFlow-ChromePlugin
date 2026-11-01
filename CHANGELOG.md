@@ -2,6 +2,15 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.6] - 2026-11-02
+
+### Fixed
+
+- At the end of a video, an AI `courseComplete=true` no longer stops the
+  session immediately. The extension first attempts the next section (including
+  scrolling the directory); it stops as completed only if no next section is
+  found.
+
 ## [0.2.5] - 2026-11-02
 
 ### Added
