@@ -119,7 +119,7 @@ function makeChromeStub({ quiz = false, ended = false } = {}) {
       onInstalled: { addListener(fn) { listeners.installed.push(fn); } },
       onStartup: { addListener(fn) { listeners.startup.push(fn); } },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getManifest: () => ({ version: '0.2.3' }),
+      getManifest: () => ({ version: '0.2.4' }),
       openOptionsPage: async () => {},
       sendMessage: async () => ({ ok: true })
     },
@@ -324,6 +324,55 @@ test('service worker synthesizes next when a video ends without an AI action', a
       messageListener({ type: 'FF_STOP' }, {}, resolve);
     });
     assert.equal(stub.local.get('ff_runtime').running, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete globalThis.chrome;
+  }
+});
+
+test('service worker still tries next when the AI asks for help at video end', async () => {
+  const stub = makeChromeStub({ ended: true });
+  globalThis.chrome = stub.chrome;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('data:')) return originalFetch(url, options);
+    return new Response(JSON.stringify({
+      id: 'mock-ended-ask',
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '{"observation":"视频结束，顶部没有下一节按钮","state":"ended","courseComplete":false,"confidence":0.7,"reason":"需要在目录里找下一节","actions":[{"type":"ask_user","message":"没有找到下一节按钮"}]}'
+        }
+      }],
+      usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const startResponse = await new Promise((resolve) => {
+      messageListener({ type: 'FF_START', tabId: 1 }, {}, resolve);
+    });
+    assert.equal(startResponse.ok, true);
+
+    let runtime;
+    for (let i = 0; i < 60; i += 1) {
+      await sleep(50);
+      runtime = stub.local.get('ff_runtime');
+      if (runtime && runtime.cycleCount >= 1) break;
+    }
+
+    assert.ok(runtime);
+    assert.equal(runtime.status, 'watching');
+    assert.equal(stub.actionLog.length, 1);
+    assert.equal(stub.actionLog[0].type, 'next');
+
+    await new Promise((resolve) => {
+      messageListener({ type: 'FF_STOP' }, {}, resolve);
+    });
   } finally {
     globalThis.fetch = originalFetch;
     delete globalThis.chrome;
