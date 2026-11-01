@@ -816,8 +816,15 @@ async function runCycle(trigger, options = {}) {
         Number(snapshot.video.currentTime) >= Number(snapshot.video.duration) - 1)
     );
     let synthesizedNext = false;
+    // Do not trust a model's "complete" guess at the end of a video until we
+    // have actually tried to advance. The next lesson may be below the visible
+    // part of the chapter directory.
+    const deferCompletionForNext = courseComplete &&
+      settings.autoNext &&
+      videoEnded &&
+      !quizContext;
 
-    const shouldSynthesizeEndedNext = !courseComplete &&
+    const shouldSynthesizeEndedNext = (!courseComplete || deferCompletionForNext) &&
       settings.autoNext &&
       videoEnded &&
       !quizContext &&
@@ -876,7 +883,7 @@ async function runCycle(trigger, options = {}) {
       detail: decision.reason
     });
 
-    if (courseComplete) {
+    if (courseComplete && !deferCompletionForNext) {
       if (!(await cycleStillValid(tab.id))) return;
       await updateRuntime({
         lastActionSummary: '所有视频节已完成',
