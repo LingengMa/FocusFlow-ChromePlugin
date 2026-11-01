@@ -6,7 +6,9 @@ import { normalizeDecision } from '../shared/ai-protocol.js';
 import { buildActionPlan, summarizePlan } from '../shared/planner.js';
 
 function makeSettings(overrides = {}) {
-  return normalizeSettings({ ...DEFAULT_SETTINGS, ...overrides });
+  // Legacy planner unit tests exercise DOM policies explicitly; the live
+  // service worker forces clickMode=vision.
+  return normalizeSettings({ ...DEFAULT_SETTINGS, clickMode: 'hybrid', ...overrides });
 }
 
 function makeSnapshot() {
@@ -356,6 +358,59 @@ test('fill-in answers are routed to the quiz textarea', () => {
   assert.equal(plan.actions.length, 1);
   assert.equal(plan.actions[0].localId, 'e6');
   assert.equal(plan.actions[0].text, '42');
+});
+
+test('visual numbered section clicks are treated as next and blocked before the end', () => {
+  const plan = buildActionPlan({
+    decision: makeDecision([{
+      type: 'click_at',
+      bbox: [0.7, 0.45, 0.95, 0.52],
+      target: '1.5 学术评审与学术不端'
+    }], { state: 'playing' }),
+    snapshot: makeSnapshot(),
+    settings: makeSettings({ clickMode: 'vision' })
+  });
+  assert.equal(plan.actions.length, 0);
+  assert.match(plan.warnings.join(' '), /尚未播放完/);
+});
+
+test('pure vision allows a coordinate scroll to reveal the directory', () => {
+  const snapshot = makeSnapshot();
+  snapshot.video.ended = true;
+  snapshot.video.currentTime = snapshot.video.duration;
+  const plan = buildActionPlan({
+    decision: makeDecision([{
+      type: 'scroll_at',
+      bbox: [0.82, 0.35, 0.98, 0.75],
+      target: '右侧目录',
+      deltaY: 620
+    }], { state: 'ended' }),
+    snapshot,
+    settings: makeSettings({ clickMode: 'vision' })
+  });
+  assert.equal(plan.actions.length, 1);
+  assert.equal(plan.actions[0].type, 'scroll_at');
+  assert.equal(plan.actions[0].deltaY, 620);
+});
+
+test('standalone chapter quiz answers are skipped in video-only mode', () => {
+  const snapshot = makeSnapshot();
+  snapshot.video = { found: false, frameId: 0 };
+  snapshot.quiz.detected = true;
+  const plan = buildActionPlan({
+    decision: makeDecision([{
+      type: 'click_at',
+      bbox: [0.1, 0.1, 0.2, 0.2],
+      target: 'B. 2'
+    }], { state: 'quiz' }),
+    snapshot,
+    settings: makeSettings({
+      clickMode: 'vision',
+      skipStandaloneQuiz: true
+    })
+  });
+  assert.equal(plan.actions.length, 0);
+  assert.match(plan.warnings.join(' '), /跳过/);
 });
 
 test('summarizePlan describes human confirmation', () => {

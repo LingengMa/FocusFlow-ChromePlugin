@@ -62,5 +62,5 @@ test('normalizeSettings converts string booleans safely', () => {
 test('normalizeSettings validates click mode', () => {
   assert.equal(normalizeSettings({ clickMode: 'vision' }).clickMode, 'vision');
   assert.equal(normalizeSettings({ clickMode: 'dom' }).clickMode, 'dom');
-  assert.equal(normalizeSettings({ clickMode: 'nonsense' }).clickMode, 'hybrid');
+  assert.equal(normalizeSettings({ clickMode: 'nonsense' }).clickMode, 'vision');
 });

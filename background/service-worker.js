@@ -10,7 +10,7 @@ import {
 import { describeAction, truncate } from '../shared/ai-protocol.js';
 import { buildActionPlan, summarizePlan } from '../shared/planner.js';
 import { nextQuizCadence } from '../shared/quiz-followup.js';
-import { hasNextAction, looksCourseComplete, shouldSynthesizeNext } from '../shared/course-state.js';
+import { hasNextAction, looksCourseComplete } from '../shared/course-state.js';
 import { looksLikeCoursePage } from '../shared/course-detect.js';
 import {
   getEffectiveSettings,
@@ -23,6 +23,7 @@ import {
 import { ApiError, analyzeWithAI, testConnection } from './ai.js';
 import { captureTab } from './capture.js';
 import { executePlan } from './executor.js';
+import { getSiteMemory, recordSiteActions } from './site-memory.js';
 import { beginPointerSession, releasePointerSession } from './pointer.js';
 import {
   appendHistory,
@@ -51,6 +52,7 @@ const AUTO_SUPPRESS_KEY = 'ff_auto_suppress';
 const MIN_ANALYSIS_GAP_MS = 6000;
 const EVENT_DEBOUNCE_MS = 1600;
 const HARD_BLOCK_RE = /登录|验证码|密码|扫码|人脸|授权|同意|支付|购买|删除|权限|证书|自动答题已关闭|自动提交已关闭|自动切换下一节已关闭|自动续播已关闭/;
+const NAV_TARGET_RE = /下一[节集课篇个章讲]|下一个|继续学习|目录|章节|第?\s*\d+(?:\.\d+)+|next|continue/i;
 
 let inFlight = false;
 let rerunRequested = false;
@@ -447,6 +449,9 @@ async function startAutomation(tabId, options = {}) {
     throw new Error('请先打开课程网页（http/https），chrome:// 页面和扩展商店不能操作。');
   }
   settings = await getEffectiveSettings(settings, url);
+  // 0.3.x is pure vision: every target is chosen from the screenshot and
+  // dispatched as a coordinate mouse/wheel event.
+  settings = { ...settings, clickMode: 'vision' };
   if (!isHostAllowed(url, settings.allowedHosts)) {
     throw new Error(`当前网站 ${new URL(url).hostname} 不在允许列表中。请到设置中调整访问范围。`);
   }
@@ -732,6 +737,7 @@ async function runCycle(trigger, options = {}) {
     }
     const url = tab.url || tab.pendingUrl || '';
     settings = await getEffectiveSettings(settings, url);
+    settings = { ...settings, clickMode: 'vision' };
     if (!isHttpUrl(url)) {
       await stopAutomation({
         status: RUNTIME_STATUS.ERROR,
@@ -792,11 +798,13 @@ async function runCycle(trigger, options = {}) {
     await setLastShot({ ...shot, at: Date.now(), trigger });
 
     runtime = await getRuntime();
+    const siteMemory = settings.learnSite ? await getSiteMemory(url) : null;
     const ai = await analyzeWithAI({
       settings,
       snapshot,
       screenshotDataUrl: shot.dataUrl,
-      runtime
+      runtime,
+      siteMemory
     });
     // The user may have pressed Stop (or started a new session) during the request.
     if (!(await cycleStillValid(tab.id))) return;
@@ -815,43 +823,55 @@ async function runCycle(trigger, options = {}) {
       (Number(snapshot.video.duration) > 0 &&
         Number(snapshot.video.currentTime) >= Number(snapshot.video.duration) - 1)
     );
-    let synthesizedNext = false;
-    // Do not trust a model's "complete" guess at the end of a video until we
-    // have actually tried to advance. The next lesson may be below the visible
-    // part of the chapter directory.
+    const noVideo = !snapshot.video?.found;
+    const standaloneQuiz = Boolean(settings.skipStandaloneQuiz && noVideo && quizContext);
+    const visionScrollCount = Number(runtime.visionScrollCount) || 0;
+    const noVideoReady = standaloneQuiz || noVideoCount >= 2;
+    const wantsNext = videoEnded || (noVideo && noVideoReady);
+
+    // “Only play video sections”: a standalone chapter quiz is not answered.
+    // Keep only navigation/scroll actions, then look for a video section.
+    if (standaloneQuiz) {
+      const before = plan.actions.length;
+      plan.actions = plan.actions.filter((action) =>
+        action.type === 'scroll_at' ||
+        action.type === 'wait' ||
+        (action.type === 'click_at' && NAV_TARGET_RE.test(action.target || ''))
+      );
+      if (plan.actions.length !== before) {
+        plan.warnings.push('当前是独立章节测验，按“仅播放视频节”跳过，不执行答题。');
+      }
+    }
+
+    // Do not trust a model's "complete" guess until we have actually tried to
+    // reveal more of the directory with a coordinate wheel event.
     const deferCompletionForNext = courseComplete &&
       settings.autoNext &&
-      videoEnded &&
-      !quizContext;
-
-    const shouldSynthesizeEndedNext = (!courseComplete || deferCompletionForNext) &&
-      settings.autoNext &&
-      videoEnded &&
-      !quizContext &&
+      wantsNext &&
+      visionScrollCount < 3;
+    const shouldScrollForNext = settings.autoNext &&
+      wantsNext &&
       plan.actions.length === 0 &&
       !plan.haltAfterMessage &&
+      visionScrollCount < 3 &&
       !HARD_BLOCK_RE.test(plan.message || '');
-    if (shouldSynthesizeNext({ snapshot, decision, plan, runtime, settings }) ||
-        shouldSynthesizeEndedNext) {
-      if (shouldSynthesizeEndedNext && plan.needsUser) {
+    if (shouldScrollForNext) {
+      if (plan.needsUser) {
         plan.needsUser = false;
         plan.message = '';
       }
       plan.actions.push({
-        type: 'next',
-        frameId: 0,
-        localId: '',
-        elementLabel: shouldSynthesizeEndedNext
-          ? '下一节（视频已结束）'
-          : '下一节（当前节无视频）',
-        synthetic: true
+        type: 'scroll_at',
+        bbox: [0.82, 0.34, 0.98, 0.74],
+        x: 0.9,
+        y: 0.55,
+        deltaY: 620,
+        target: '右侧目录'
       });
-      plan.warnings.push(
-        shouldSynthesizeEndedNext
-          ? '视频已结束，自动尝试下一节。'
-          : '当前节没有视频，自动尝试下一节。'
-      );
-      synthesizedNext = true;
+      plan.warnings.push('用视觉坐标滚动右侧目录，查找下一个视频节。');
+    } else if (visionScrollCount >= 3 && plan.actions.some((action) => action.type === 'scroll_at')) {
+      plan.actions = plan.actions.filter((action) => action.type !== 'scroll_at');
+      plan.warnings.push('已滚动目录多次，停止继续滚动。');
     }
 
     const summary = summarizePlan(plan);
@@ -892,6 +912,20 @@ async function runCycle(trigger, options = {}) {
       await stopAutomation({
         status: RUNTIME_STATUS.COMPLETED,
         reason: '所有视频节已完成，FocusFlow 已自动停止。',
+        notifyUser: true
+      });
+      return;
+    }
+
+    if (!courseComplete &&
+        wantsNext &&
+        visionScrollCount >= 3 &&
+        plan.actions.length === 0 &&
+        !plan.needsUser &&
+        !plan.haltAfterMessage) {
+      await stopAutomation({
+        status: RUNTIME_STATUS.COMPLETED,
+        reason: '已滚动目录多次，仍未发现后续视频节，按全部视频节完成停止。',
         notifyUser: true
       });
       return;
@@ -962,7 +996,10 @@ async function runCycle(trigger, options = {}) {
     }
 
     const nextAction = hasNextAction(plan);
-    const cadence = nextQuizCadence({ snapshot, decision, plan, runtime, settings });
+    const scrollAction = plan.actions.some((action) => action.type === 'scroll_at');
+    const cadence = standaloneQuiz
+      ? { mode: 'normal', armed: false, count: 0, answered: false }
+      : nextQuizCadence({ snapshot, decision, plan, runtime, settings });
     if (cadence.answered && snapshot.quiz?.detected && settings.autoAnswer && !settings.autoSubmit) {
       const message = '答案已选择，但“自动提交”已关闭。请核对答案并手动提交，然后重新启动。';
       await updateRuntime({ lastActionSummary: execution.summary });
@@ -975,6 +1012,14 @@ async function runCycle(trigger, options = {}) {
 
     const tabAfter = await getTabSummary(tab.id);
     runtime = await getRuntime();
+    if (settings.learnSite && execution.ok && !settings.dryRun) {
+      const learned = await recordSiteActions(url, plan.actions, {
+        title: tabAfter?.title || runtime.targetTitle,
+        url: tabAfter?.url || runtime.targetUrl,
+        observation: decision.observation
+      });
+      if (learned) await updateRuntime({ siteMemory: learned });
+    }
     const historyEntry = {
       at: Date.now(),
       state: decision.state,
@@ -1000,19 +1045,6 @@ async function runCycle(trigger, options = {}) {
     }
 
     if (!execution.ok) {
-      const noNextControl = /没有找到.*下一节|没有找到“下一节”|next/i.test(execution.message || '');
-      if (noNextControl && (synthesizedNext || !snapshot.video?.found || snapshot.video?.ended)) {
-        await updateRuntime({
-          lastError: execution.message,
-          lastActionSummary: '没有更多视频节'
-        });
-        await stopAutomation({
-          status: RUNTIME_STATUS.COMPLETED,
-          reason: '所有视频节已完成：当前节没有视频，且没有找到下一节。',
-          notifyUser: true
-        });
-        return;
-      }
       throw new Error(execution.message || '页面操作失败。');
     }
 
@@ -1028,7 +1060,12 @@ async function runCycle(trigger, options = {}) {
       quizVerifyArmed: cadence.armed,
       quizRetryCount: cadence.count,
       quizVerifyAt: null,
-      noVideoCount: nextAction ? 0 : noVideoCount,
+      noVideoCount: nextAction || snapshot.video?.found ? 0 : noVideoCount,
+      visionScrollCount: scrollAction
+        ? visionScrollCount + 1
+        : nextAction || (snapshot.video?.found && !videoEnded)
+          ? 0
+          : visionScrollCount,
       selfHealRetryCount: 0,
       history
     });
@@ -1071,15 +1108,19 @@ async function runCycle(trigger, options = {}) {
 
     const sectionProbe = !settings.dryRun &&
       settings.autoNext &&
-      !quizContext &&
-      (nextAction || (!snapshot.video?.found && noVideoCount >= 1));
+      (!quizContext || standaloneQuiz) &&
+      (nextAction || scrollAction || (!snapshot.video?.found && noVideoCount >= 1));
     if (sectionProbe) {
       await sendHud(tab.id, {
         kind: 'watching',
-        text: nextAction ? '已切换，检查下一节…' : '当前节没有视频，检查下一节…',
-        detail: '短周期复查'
+        text: scrollAction
+          ? '已滚动目录，继续查找下一节…'
+          : nextAction
+            ? '已切换，检查下一节…'
+            : '当前节不是视频，跳过…',
+        detail: scrollAction ? '2 秒后复查' : '短周期复查'
       });
-      await scheduleQuizVerify(5, 'section');
+      await scheduleQuizVerify(scrollAction ? 2 : 5, 'section');
       return;
     }
 

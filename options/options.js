@@ -29,7 +29,9 @@ const TOGGLES = [
   'hud',
   'dryRun',
   'autoStart',
-  'selfHeal'
+  'selfHeal',
+  'skipStandaloneQuiz',
+  'learnSite'
 ];
 
 let dirty = false;

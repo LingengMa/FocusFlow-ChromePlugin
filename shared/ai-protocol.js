@@ -24,6 +24,7 @@ export const ACTION_TYPES = Object.freeze([
   'next',
   'click_at',
   'type_at',
+  'scroll_at',
   'ask_user',
   'wait'
 ]);
@@ -46,6 +47,11 @@ const ALIASES = Object.freeze({
   tap_at: 'click_at',
   type_at: 'type_at',
   fill_at: 'type_at',
+  scroll: 'scroll_at',
+  wheel: 'scroll_at',
+  scroll_at: 'scroll_at',
+  scroll_sidebar: 'scroll_at',
+  swipe: 'scroll_at',
   select: 'choose',
   select_option: 'choose',
   select_answer: 'choose',
@@ -297,6 +303,17 @@ function normalizeAction(raw, index, warnings) {
       }
       return { type, ...bbox, target, text };
     }
+    case 'scroll_at': {
+      const bbox = normalizeBbox(raw, warnings);
+      const target = truncate(raw.target ?? raw.label ?? raw.description ?? raw.name, 100);
+      const deltaY = clampNumber(raw.deltaY ?? raw.dy ?? raw.scrollY, -2000, 2000, 600);
+      if (!bbox) return null;
+      if (!target) {
+        warnings.push('scroll_at 缺少 target 描述，已忽略。');
+        return null;
+      }
+      return { type, ...bbox, target, deltaY: Math.round(deltaY) };
+    }
     case 'ask_user': {
       const message = truncate(raw.message ?? raw.text ?? raw.reason, 300) ||
         '需要你确认后继续。';
@@ -374,6 +391,7 @@ export function actionPermission(action, settings) {
     if (!settings.autoSubmit) return '自动提交已关闭';
   }
   if (action.type === 'next' && !settings.autoNext) return '自动切换下一节已关闭';
+  if (action.type === 'scroll_at' && !settings.autoNext) return '自动切换下一节已关闭';
   return null;
 }
 
@@ -389,6 +407,7 @@ export function describeAction(action) {
     case 'next': return '切换下一节';
     case 'click_at': return `点击“${action.target || '视觉目标'}”`;
     case 'type_at': return `在“${action.target || '视觉输入框'}”填写`;
+    case 'scroll_at': return `滚动“${action.target || '视觉区域'}” ${action.deltaY || 0}px`;
     case 'ask_user': return '请求人工确认';
     case 'wait': return `等待 ${action.seconds}s`;
     default: return action.type;

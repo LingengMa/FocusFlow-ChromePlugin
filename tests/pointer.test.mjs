@@ -44,6 +44,38 @@ test('clickAtPoint uses CDP mouse events and inserts text', async () => {
   }
 });
 
+test('scrollAtPoint sends a CDP mouse wheel', async () => {
+  const calls = [];
+  globalThis.chrome = {
+    debugger: {
+      attach: async () => { calls.push(['attach']); },
+      detach: async () => { calls.push(['detach']); },
+      sendCommand: async (target, method, params) => {
+        calls.push(['command', method, params]);
+      }
+    },
+    tabs: {
+      sendMessage: async () => {
+        throw new Error('content fallback should not run');
+      }
+    }
+  };
+
+  try {
+    const { scrollAtPoint } = await import('../background/pointer.js');
+    const result = await scrollAtPoint(9, 1100, 500, 620);
+    assert.equal(result.method, 'debugger');
+    assert.equal(result.x, 1100);
+    assert.equal(result.y, 500);
+    const wheel = calls.find((call) =>
+      call[1] === 'Input.dispatchMouseEvent' && call[2].type === 'mouseWheel'
+    );
+    assert.equal(wheel[2].deltaY, 620);
+  } finally {
+    delete globalThis.chrome;
+  }
+});
+
 test('clickAtPoint falls back to the content script when debugger attach fails', async () => {
   let message = null;
   globalThis.chrome = {

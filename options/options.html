@@ -134,19 +134,25 @@
             <label class="toggle-row">
               <input type="checkbox" id="selfHeal">
               <span class="switch" aria-hidden="true"></span>
-              <span class="toggle-copy"><strong>自诊断与自动修复</strong><small>连续点击失败时切换视觉/DOM策略，接口限流时自动放慢，答题失败自动换策略重试</small></span>
+              <span class="toggle-copy"><strong>自诊断与自动修复</strong><small>点击失败时调整坐标重试，接口限流时自动放慢，答题失败自动重试</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="skipStandaloneQuiz">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>仅播放视频节</strong><small>整节是独立章节测验/考试时跳过，不在测验页作答；视频内弹题仍会正常作答</small></span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="learnSite">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>自主学习页面操作</strong><small>记录成功的视觉点击/滚动位置，下次在本站优先参考，不修改扩展源码</small></span>
             </label>
           </div>
 
-          <label class="field" style="margin-bottom: 14px;">
+          <div class="field" style="margin-bottom: 14px;">
             <span>点击方式</span>
-            <select id="clickMode">
-              <option value="hybrid">视觉坐标 + DOM 兜底（推荐）</option>
-              <option value="vision">仅视觉坐标</option>
-              <option value="dom">仅 DOM 元素（旧模式）</option>
-            </select>
-            <small>视觉坐标由模型框选截图目标，扩展用 CDP 发出真实鼠标点击；需要 <code>debugger</code> 权限。混合模式在坐标点击失败时回退到 DOM。</small>
-          </label>
+            <strong>纯视觉坐标（固定）</strong>
+            <small>所有操作都由截图识别目标，再用 CDP 在坐标处发送真实鼠标点击/滚轮；不再依赖 DOM 选择器。需要 <code>debugger</code> 权限。</small>
+          </div>
 
           <div class="grid three">
             <label class="field">
@@ -251,7 +257,7 @@
         <section class="card about-card">
           <img src="../icons/icon48.png" alt="" class="mini-logo">
           <div>
-            <strong>FocusFlow <span id="aboutVersion">v0.2.6</span></strong>
+            <strong>FocusFlow <span id="aboutVersion">v0.3.0</span></strong>
             <small>Chrome MV3 · 本地运行 · 无遥测</small>
           </div>
         </section>

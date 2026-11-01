@@ -1,5 +1,5 @@
 import { describeAction, truncate } from '../shared/ai-protocol.js';
-import { clickAtPoint } from './pointer.js';
+import { clickAtPoint, scrollAtPoint } from './pointer.js';
 import { executeActionInFrame } from './tabs.js';
 
 function sleep(ms) {
@@ -16,6 +16,7 @@ function settleDelay(action) {
   if (action.type === 'submit') return 1200;
   if (action.type === 'play') return 550;
   if (action.type === 'click_at' || action.type === 'type_at') return 600;
+  if (action.type === 'scroll_at') return 500;
   if (action.type === 'choose' || action.type === 'type' || action.type === 'click') return 420;
   return 250;
 }
@@ -26,17 +27,19 @@ async function executeOne({ action, snapshot, settings, tabId }) {
     return { ok: true, type: action.type, detail: `等待 ${action.seconds}s` };
   }
 
-  if (action.type === 'click_at' || action.type === 'type_at') {
+  if (action.type === 'click_at' || action.type === 'type_at' || action.type === 'scroll_at') {
     const width = Number(snapshot?.viewport?.width);
     const height = Number(snapshot?.viewport?.height);
     if (!(width > 0) || !(height > 0)) {
-      throw new Error('缺少页面 viewport，无法把视觉坐标映射到点击位置。');
+      throw new Error('缺少页面 viewport，无法把视觉坐标映射到操作位置。');
     }
     const x = Math.min(width - 1, Math.max(0, Math.round(action.x * width)));
     const y = Math.min(height - 1, Math.max(0, Math.round(action.y * height)));
-    const result = await clickAtPoint(tabId, x, y, {
-      text: action.type === 'type_at' ? action.text : ''
-    });
+    const result = action.type === 'scroll_at'
+      ? await scrollAtPoint(tabId, x, y, action.deltaY)
+      : await clickAtPoint(tabId, x, y, {
+          text: action.type === 'type_at' ? action.text : ''
+        });
     await sleep(settleDelay(action));
     return {
       ok: true,

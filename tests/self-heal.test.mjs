@@ -52,7 +52,7 @@ test.beforeEach(() => {
   store.clear();
 });
 
-test('switches to DOM after two vision failures for the host', async () => {
+test('keeps vision mode and asks for a coordinate retry after failures', async () => {
   const first = await recordActionResults(COURSE_URL, [
     { type: 'click_at', ok: false, detail: 'coordinate miss' }
   ]);
@@ -61,19 +61,20 @@ test('switches to DOM after two vision failures for the host', async () => {
   const second = await recordActionResults(COURSE_URL, [
     { type: 'click_at', ok: false, detail: 'coordinate miss' }
   ]);
-  assert.equal(second.action, 'switch-click-mode');
-  assert.equal(second.mode, 'dom');
+  assert.equal(second.action, 'retry-vision');
+  assert.equal(second.mode, 'vision');
 
   const effective = await getEffectiveSettings(baseSettings, COURSE_URL);
-  assert.equal(effective.clickMode, 'dom');
-  assert.equal((await getSelfHealProfile(COURSE_URL)).lastDiagnosis.includes('视觉坐标'), true);
+  assert.equal(effective.clickMode, 'vision');
+  assert.equal((await getSelfHealProfile(COURSE_URL)).lastDiagnosis.includes('视觉点击'), true);
 });
 
-test('switches to vision after repeated DOM failures', async () => {
+test('legacy DOM failures do not switch away from vision', async () => {
   await recordActionResults(COURSE_URL, [{ type: 'choose', ok: false }]);
   const diagnosis = await recordActionResults(COURSE_URL, [{ type: 'choose', ok: false }]);
-  assert.equal(diagnosis.mode, 'vision');
-  assert.equal(store.get('ff_self_heal')[new URL(COURSE_URL).hostname].clickMode, 'vision');
+  assert.equal(diagnosis, null);
+  const effective = await getEffectiveSettings(baseSettings, COURSE_URL);
+  assert.equal(effective.clickMode, 'vision');
 });
 
 test('backs off the capture interval after a 429', async () => {
@@ -87,7 +88,7 @@ test('backs off the capture interval after a 429', async () => {
 test('allows one automatic quiz strategy retry per window', async () => {
   const first = await recordQuizRetryLimit(COURSE_URL);
   assert.equal(first.action, 'quiz-retry-mode');
-  assert.ok(['vision', 'dom'].includes(first.mode));
+  assert.equal(first.mode, 'vision');
 
   const second = await recordQuizRetryLimit(COURSE_URL);
   assert.equal(second, null);

@@ -101,6 +101,7 @@ export function buildActionPlan({ decision, snapshot, settings }) {
   const videoFrame = Number.isInteger(snapshot?.video?.frameId) ? snapshot.video.frameId : 0;
   const quizFrame = Number.isInteger(snapshot?.quiz?.frameId) ? snapshot.quiz.frameId : videoFrame;
   const quizDetected = Boolean(snapshot?.quiz?.detected);
+  const standaloneQuiz = Boolean(settings.skipStandaloneQuiz && !snapshot?.video?.found && quizDetected);
   const threshold = Number(settings.confidenceThreshold) || 0.72;
 
   if (decision.state === 'quiz' && !quizDetected) {
@@ -110,7 +111,7 @@ export function buildActionPlan({ decision, snapshot, settings }) {
   for (const action of decision.actions || []) {
     if (
       settings.clickMode === 'vision' &&
-      ['click', 'choose', 'type', 'submit', 'next'].includes(action.type)
+      ['click', 'choose', 'type', 'submit', 'next', 'play', 'pause'].includes(action.type)
     ) {
       warnings.push('纯视觉模式下已忽略依赖 elementId 的点击动作。');
       continue;
@@ -306,10 +307,15 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           continue;
         }
         const isPlay = /播放|play|resume/i.test(target);
-        const isNext = /下一[节集课篇个章讲]|下一个|next|继续学习/i.test(target);
+        const isNext = /下一[节集课篇个章讲]|下一个|next|继续学习|目录|章节|^\d+(?:\.\d+)+\s+\S|第\s*\d+(?:\.\d+)+/i.test(target);
         const isSubmit = /提交|交卷|确定|确认|submit|confirm/i.test(target);
         const isAnswer = QUIZ_TARGET_RE.test(target);
         const quizDetected = Boolean(snapshot?.quiz?.detected);
+
+        if (standaloneQuiz && (isSubmit || isAnswer)) {
+          warnings.push('当前是独立章节测验，按“仅播放视频节”策略跳过，不执行答题。');
+          continue;
+        }
 
         if (isPlay && !settings.autoResume) {
           return needsHuman(policyMessage('自动续播已关闭', decision), { blocked, warnings });
@@ -376,6 +382,10 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           warnings.push('当前为 DOM 点击模式，视觉坐标输入已忽略。');
           continue;
         }
+        if (standaloneQuiz) {
+          warnings.push('当前是独立章节测验，跳过输入答案。');
+          continue;
+        }
         if (DANGEROUS_TEXT_RE.test(action.target)) {
           warnings.push(`视觉输入目标“${action.target}”被安全策略禁止。`);
           continue;
@@ -390,6 +400,23 @@ export function buildActionPlan({ decision, snapshot, settings }) {
         if (decision.confidence < threshold) {
           return needsHuman(
             `AI 对答案的置信度只有 ${Math.round(decision.confidence * 100)}%，低于阈值。请手动确认。`,
+            { blocked, warnings }
+          );
+        }
+        actions.push({ ...action });
+        break;
+      }
+      case 'scroll_at': {
+        if (snapshot?.video?.found && !videoNearEnd(snapshot)) {
+          warnings.push('视频尚未播放完，目录滚动已忽略。');
+          continue;
+        }
+        if (!settings.autoNext) {
+          return needsHuman(policyMessage('自动切换下一节已关闭', decision), { blocked, warnings });
+        }
+        if (decision.confidence < 0.4) {
+          return needsHuman(
+            `AI 对滚动“${action.target}”的置信度只有 ${Math.round(decision.confidence * 100)}%。请确认。`,
             { blocked, warnings }
           );
         }

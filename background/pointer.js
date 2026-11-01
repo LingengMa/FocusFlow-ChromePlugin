@@ -111,6 +111,38 @@ async function dispatchClick(tabId, x, y) {
   );
 }
 
+async function dispatchScroll(tabId, x, y, deltaY) {
+  await chrome.debugger.sendCommand(
+    { tabId },
+    'Input.dispatchMouseEvent',
+    {
+      type: 'mouseWheel',
+      x,
+      y,
+      deltaX: 0,
+      deltaY: Math.round(deltaY),
+      button: 'none',
+      buttons: 0
+    }
+  );
+}
+
+async function contentScroll(tabId, x, y, deltaY) {
+  const response = await withTimeout(
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: 'FF_SCROLL_POINT', x, y, deltaY },
+      { frameId: 0 }
+    ),
+    5000,
+    '页面坐标滚动'
+  );
+  if (!response?.ok) {
+    throw new Error(response?.error || '页面没有响应坐标滚动');
+  }
+  return response;
+}
+
 async function contentClick(tabId, x, y, text) {
   const response = await withTimeout(
     chrome.tabs.sendMessage(
@@ -125,6 +157,49 @@ async function contentClick(tabId, x, y, text) {
     throw new Error(response?.error || '页面没有响应坐标点击');
   }
   return response;
+}
+
+/**
+ * Sends a mouse wheel at a CSS-pixel point, so the vision model can scroll a
+ * sidebar or the document without DOM selectors.
+ */
+export async function scrollAtPoint(tabId, x, y, deltaY = 600) {
+  const px = Math.round(Number(x) || 0);
+  const py = Math.round(Number(y) || 0);
+  const delta = Math.max(-2000, Math.min(2000, Math.round(Number(deltaY) || 600)));
+  let owned = false;
+  let debuggerError = null;
+
+  try {
+    owned = await attach(tabId);
+    await dispatchScroll(tabId, px, py, delta);
+    return {
+      method: 'debugger',
+      detail: `已在 (${px},${py}) 滚动 ${delta}px`,
+      x: px,
+      y: py
+    };
+  } catch (error) {
+    debuggerError = error;
+  } finally {
+    await detach(tabId, owned);
+  }
+
+  try {
+    const response = await contentScroll(tabId, px, py, delta);
+    return {
+      method: 'content',
+      detail: response.detail || `已在 (${px},${py}) 滚动 ${delta}px`,
+      x: px,
+      y: py
+    };
+  } catch (contentError) {
+    const debuggerMessage = String(debuggerError?.message || debuggerError || '');
+    throw new Error(
+      `坐标滚动失败：${String(contentError?.message || contentError)}` +
+      (debuggerMessage ? `（debugger: ${debuggerMessage}）` : '')
+    );
+  }
 }
 
 /**

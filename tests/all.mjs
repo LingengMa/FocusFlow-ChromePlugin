@@ -9,3 +9,4 @@ import './ai-client.test.mjs';
 import './service-worker.test.mjs';
 import './pointer.test.mjs';
 import './self-heal.test.mjs';
+import './site-memory.test.mjs';

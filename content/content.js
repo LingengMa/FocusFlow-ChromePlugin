@@ -1119,6 +1119,42 @@
     return { ok: true, detail: `已点击“${labelFor(element)}”` };
   }
 
+  function scrollAtPoint(x, y, deltaY) {
+    const cx = Number(x) || 0;
+    const cy = Number(y) || 0;
+    const amount = Math.round(Number(deltaY) || 600);
+    const hit = document.elementFromPoint(cx, cy);
+    let node = hit;
+    while (node && node !== document.body && node !== document.documentElement) {
+      try {
+        const style = getComputedStyle(node);
+        if (
+          /(auto|scroll|overlay)/.test(style.overflowY) &&
+          node.scrollHeight > node.clientHeight + 10
+        ) {
+          node.scrollTop += amount;
+          try {
+            node.dispatchEvent(new WheelEvent('wheel', {
+              bubbles: true,
+              cancelable: true,
+              deltaY: amount,
+              clientX: cx,
+              clientY: cy
+            }));
+          } catch {
+            // WheelEvent may be unavailable in exotic frames.
+          }
+          return { ok: true, detail: `已滚动页面区域 ${amount}px` };
+        }
+      } catch {
+        // keep walking
+      }
+      node = node.parentElement;
+    }
+    window.scrollBy(0, amount);
+    return { ok: true, detail: `已滚动页面 ${amount}px` };
+  }
+
   function clickAtPoint(x, y, text = '') {
     let doc = document;
     let cx = Number(x) || 0;
@@ -1442,6 +1478,9 @@
           return true;
         case 'FF_CLICK_POINT':
           sendResponse(clickAtPoint(message.x, message.y, message.text || ''));
+          return false;
+        case 'FF_SCROLL_POINT':
+          sendResponse(scrollAtPoint(message.x, message.y, message.deltaY));
           return false;
         case 'FF_HUD':
           applyHud(message.payload);

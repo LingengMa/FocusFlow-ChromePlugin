@@ -19,8 +19,12 @@ export function looksLikeDocument(snapshot) {
 export function hasNextAction(plan) {
   return Boolean(plan?.actions?.some((action) => {
     if (action.type === 'next') return true;
-    if (action.type === 'click_at') return /下一[节集课篇个章讲]|next/i.test(action.target || '');
-    if (action.type === 'click') return /下一[节集课篇个章讲]|next/i.test(action.elementLabel || '');
+    if (action.type === 'click_at') {
+      return /下一[节集课篇个章讲]|next|继续学习|目录|章节|^\d+(?:\.\d+)+\s+\S|第\s*\d+(?:\.\d+)+/i.test(action.target || '');
+    }
+    if (action.type === 'click') {
+      return /下一[节集课篇个章讲]|next|继续学习|目录|章节|^\d+(?:\.\d+)+\s+\S/i.test(action.elementLabel || '');
+    }
     return false;
   }));
 }
