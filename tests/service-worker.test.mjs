@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function makeChromeStub({ quiz = false, ended = false } = {}) {
+function makeChromeStub({ quiz = false, ended = false, noVideo = false } = {}) {
   const local = new Map();
   const session = new Map();
   const actionLog = [];
@@ -35,7 +35,7 @@ function makeChromeStub({ quiz = false, ended = false } = {}) {
     isTop: true,
     viewport: { width: 1280, height: 720, dpr: 1 },
     video: {
-      found: true,
+      found: !noVideo,
       currentTime: ended ? 300 : 12,
       duration: 300,
       paused: quiz || ended,
@@ -119,7 +119,7 @@ function makeChromeStub({ quiz = false, ended = false } = {}) {
       onInstalled: { addListener(fn) { listeners.installed.push(fn); } },
       onStartup: { addListener(fn) { listeners.startup.push(fn); } },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getManifest: () => ({ version: '0.2.6' }),
+      getManifest: () => ({ version: '0.3.0' }),
       openOptionsPage: async () => {},
       sendMessage: async () => ({ ok: true })
     },
@@ -280,7 +280,7 @@ test('diagnostics export contains page structure but no secrets or screenshots',
   }
 });
 
-test('service worker synthesizes next when a video ends without an AI action', async () => {
+test('service worker scrolls the directory when a video ends without an AI action', async () => {
   const stub = makeChromeStub({ ended: true });
   globalThis.chrome = stub.chrome;
 
@@ -317,8 +317,10 @@ test('service worker synthesizes next when a video ends without an AI action', a
 
     assert.ok(runtime);
     assert.equal(runtime.status, 'watching');
-    assert.equal(stub.actionLog.length, 1);
-    assert.equal(stub.actionLog[0].type, 'next');
+    const wheels = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mouseWheel'
+    );
+    assert.equal(wheels.length, 1);
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);
@@ -330,7 +332,7 @@ test('service worker synthesizes next when a video ends without an AI action', a
   }
 });
 
-test('service worker still tries next when the AI asks for help at video end', async () => {
+test('service worker scrolls before asking for help at video end', async () => {
   const stub = makeChromeStub({ ended: true });
   globalThis.chrome = stub.chrome;
 
@@ -367,8 +369,10 @@ test('service worker still tries next when the AI asks for help at video end', a
 
     assert.ok(runtime);
     assert.equal(runtime.status, 'watching');
-    assert.equal(stub.actionLog.length, 1);
-    assert.equal(stub.actionLog[0].type, 'next');
+    const wheels = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mouseWheel'
+    );
+    assert.equal(wheels.length, 1);
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);
@@ -379,7 +383,7 @@ test('service worker still tries next when the AI asks for help at video end', a
   }
 });
 
-test('service worker tries next before trusting courseComplete at video end', async () => {
+test('service worker scrolls before trusting courseComplete at video end', async () => {
   const stub = makeChromeStub({ ended: true });
   globalThis.chrome = stub.chrome;
 
@@ -417,8 +421,10 @@ test('service worker tries next before trusting courseComplete at video end', as
     assert.ok(runtime);
     assert.equal(runtime.running, true);
     assert.equal(runtime.status, 'watching');
-    assert.equal(stub.actionLog.length, 1);
-    assert.equal(stub.actionLog[0].type, 'next');
+    const wheels = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mouseWheel'
+    );
+    assert.equal(wheels.length, 1);
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);
@@ -547,7 +553,62 @@ test('service worker maps a visual bbox to a CDP click', async () => {
   }
 });
 
-test('service worker plans and dispatches quiz choose + submit actions', async () => {
+test('service worker skips an entire standalone chapter quiz', async () => {
+  const stub = makeChromeStub({ quiz: true, noVideo: true });
+  globalThis.chrome = stub.chrome;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('data:')) return originalFetch(url, options);
+    return new Response(JSON.stringify({
+      id: 'mock-standalone-quiz',
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '{"observation":"整节是章节测验","state":"quiz","courseComplete":false,"confidence":0.95,"reason":"应跳过测验","quiz":{"detected":true,"answerSummary":"B"},"actions":[{"type":"click_at","bbox":[0.2,0.3,0.3,0.4],"target":"B. 2"}]}'
+        }
+      }],
+      usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const startResponse = await new Promise((resolve) => {
+      messageListener({ type: 'FF_START', tabId: 1 }, {}, resolve);
+    });
+    assert.equal(startResponse.ok, true);
+
+    let runtime;
+    for (let i = 0; i < 60; i += 1) {
+      await sleep(50);
+      runtime = stub.local.get('ff_runtime');
+      if (runtime && runtime.cycleCount >= 1) break;
+    }
+
+    assert.ok(runtime);
+    assert.equal(runtime.status, 'watching');
+    const pressed = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'
+    );
+    const wheels = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mouseWheel'
+    );
+    assert.equal(pressed.length, 0);
+    assert.equal(wheels.length, 1);
+
+    await new Promise((resolve) => {
+      messageListener({ type: 'FF_STOP' }, {}, resolve);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete globalThis.chrome;
+  }
+});
+
+test('service worker dispatches in-video quiz actions with vision coordinates', async () => {
   const stub = makeChromeStub({ quiz: true });
   globalThis.chrome = stub.chrome;
 
@@ -566,8 +627,8 @@ test('service worker plans and dispatches quiz choose + submit actions', async (
             reason: '题目和选项清晰',
             quiz: { detected: true, question: '1 + 1 等于多少？', answerSummary: 'B. 2' },
             actions: [
-              { type: 'choose', elementId: 'f0:e1' },
-              { type: 'submit', elementId: 'f0:e2' }
+              { type: 'click_at', bbox: [0.15, 0.15, 0.25, 0.22], target: 'B. 2' },
+              { type: 'click_at', bbox: [0.30, 0.40, 0.50, 0.48], target: '提交答案' }
             ]
           })
         }
@@ -598,9 +659,11 @@ test('service worker plans and dispatches quiz choose + submit actions', async (
     assert.equal(runtime.cycleCount, 1);
     assert.equal(runtime.lastDecision.state, 'quiz');
     assert.equal(runtime.lastDecision.quiz.detected, true);
-    assert.deepEqual(stub.actionLog.map((action) => action.type), ['choose', 'submit']);
-    assert.equal(stub.actionLog[0].localId, 'e1');
-    assert.equal(stub.actionLog[1].localId, 'e2');
+    assert.equal(runtime.lastDecision.planSummary.includes('点击'), true);
+    const clicks = stub.debuggerCalls.filter((call) =>
+      call[0] === 'command' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'
+    );
+    assert.equal(clicks.length, 2);
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);

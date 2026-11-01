@@ -33,7 +33,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   quizVerifySeconds: 4,
   // hybrid = vision coordinates with DOM fallback; vision = coordinates only;
   // dom = legacy elementId actions.
-  clickMode: 'hybrid',
+  clickMode: 'vision',
 
   // Browser / UI behaviour
   focusTarget: true,
@@ -41,6 +41,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   dryRun: false,
   autoStart: true,
   selfHeal: true,
+  skipStandaloneQuiz: true,
+  learnSite: true,
 
   // Optional http(s) hostname allow-list. Empty means any http(s) page.
   allowedHosts: [],
@@ -83,6 +85,8 @@ export function defaultRuntime() {
     quizVerifyAt: null,
     probeReason: '',
     noVideoCount: 0,
+    visionScrollCount: 0,
+    siteMemory: null,
     autoStarted: false,
     selfHealRetryCount: 0,
     lastSelfHeal: null,
@@ -211,6 +215,8 @@ export function normalizeSettings(raw = {}) {
     dryRun: toBool(merged.dryRun),
     autoStart: toBool(merged.autoStart),
     selfHeal: toBool(merged.selfHeal),
+    skipStandaloneQuiz: toBool(merged.skipStandaloneQuiz),
+    learnSite: toBool(merged.learnSite),
     allowedHosts: normalizeHostPatterns(merged.allowedHosts),
     extraPrompt: String(merged.extraPrompt || '').trim().slice(0, 2000)
   };

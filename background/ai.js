@@ -153,8 +153,8 @@ async function requestWithJsonFallback(options) {
   }
 }
 
-function buildUserMessage({ snapshot, runtime, settings, screenshotDataUrl }) {
-  const text = buildUserPrompt({ snapshot, runtime, settings });
+function buildUserMessage({ snapshot, runtime, settings, screenshotDataUrl, siteMemory }) {
+  const text = buildUserPrompt({ snapshot, runtime, settings, siteMemory });
   return [
     { type: 'text', text },
     {
@@ -167,12 +167,12 @@ function buildUserMessage({ snapshot, runtime, settings, screenshotDataUrl }) {
   ];
 }
 
-export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, runtime }) {
+export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, runtime, siteMemory }) {
   const messages = [
     { role: 'system', content: buildSystemPrompt(settings) },
     {
       role: 'user',
-      content: buildUserMessage({ snapshot, runtime, settings, screenshotDataUrl })
+      content: buildUserMessage({ snapshot, runtime, settings, screenshotDataUrl, siteMemory })
     }
   ];
 

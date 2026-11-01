@@ -56,6 +56,7 @@ test('does not synthesize next when a video or quiz is present', () => {
 test('recognizes next actions across DOM and vision forms', () => {
   assert.equal(hasNextAction({ actions: [{ type: 'next' }] }), true);
   assert.equal(hasNextAction({ actions: [{ type: 'click_at', target: '下一节' }] }), true);
+  assert.equal(hasNextAction({ actions: [{ type: 'click_at', target: '1.5 学术评审与学术不端' }] }), true);
   assert.equal(hasNextAction({ actions: [{ type: 'click', elementLabel: '下一节' }] }), true);
   assert.equal(hasNextAction({ actions: [{ type: 'click_at', target: '播放按钮' }] }), false);
 });

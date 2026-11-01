@@ -2,6 +2,28 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.3.0] - 2026-11-02
+
+### Added
+
+- Pure-vision operating mode: every target is chosen from the screenshot and
+  dispatched as a CDP coordinate click or mouse wheel. DOM `elementId` actions
+  are no longer used.
+- `scroll_at`: vision-coordinate mouse wheel, used to scroll the right-hand
+  chapter directory and discover lazily rendered sections.
+- Per-host visual learning memory (`ff_site_memory`): successful click/scroll
+  targets and coordinates are reused as hints in later prompts.
+- "Video sections only" mode: standalone chapter quizzes/exams are skipped
+  instead of answered; PPT/document sections are skipped to the next video.
+- Settings toggles for skipping standalone quizzes and learning site actions.
+
+### Changed
+
+- The click-mode setting is now fixed to pure vision; legacy DOM/hybrid values
+  are ignored at runtime.
+- At video end, the agent scrolls the directory before trusting a model's
+  `courseComplete` judgment.
+
 ## [0.2.6] - 2026-11-02
 
 ### Fixed

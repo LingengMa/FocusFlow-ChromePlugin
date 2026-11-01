@@ -116,6 +116,25 @@ test('normalizes point and type_at actions', () => {
   assert.equal(decision.actions[1].text, '42');
 });
 
+test('normalizes coordinate scroll actions', () => {
+  const decision = normalizeDecision({
+    state: 'ended',
+    confidence: 0.9,
+    actions: [
+      {
+        type: 'scroll_at',
+        bbox: [0.82, 0.35, 0.98, 0.75],
+        target: '右侧目录',
+        deltaY: 620
+      }
+    ]
+  });
+  assert.equal(decision.actions.length, 1);
+  assert.equal(decision.actions[0].type, 'scroll_at');
+  assert.equal(decision.actions[0].deltaY, 620);
+  assert.equal(decision.actions[0].x, 0.9);
+});
+
 test('normalizes quiz correctness and feedback', () => {
   const wrong = normalizeDecision({
     state: 'quiz',
