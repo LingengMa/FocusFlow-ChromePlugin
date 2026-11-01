@@ -2,6 +2,15 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.3] - 2026-11-02
+
+### Fixed
+
+- Improved current-section detection for chapter directories: match
+  `chapterId`/`sectionId` URL parameters first, accept a unique active/select
+  class, and only then fall back to the highlighted row. This avoids treating
+  every directory row with the same class as the current section.
+
 ## [0.2.2] - 2026-11-02
 
 ### Fixed

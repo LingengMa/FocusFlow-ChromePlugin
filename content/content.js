@@ -613,9 +613,13 @@
       const target = new URL(href, location.href);
       if (target.href === location.href) return true;
       const current = new URLSearchParams(location.search);
+      let compared = 0;
       for (const [key, value] of current) {
-        if (value && target.searchParams.get(key) === value) return true;
+        if (!value || !/^(chapter|section|knowledge|node|lesson|cell|task|id)/i.test(key)) continue;
+        compared += 1;
+        if (target.searchParams.get(key) !== value) return false;
       }
+      return compared > 0;
     } catch {
       // ignore malformed sidebar hrefs
     }
@@ -693,9 +697,14 @@
     });
     if (items.length < 2) return null;
 
-    let index = items.findIndex((item) => sidebarState(item.element));
+    const urlIndex = items.findIndex((item) => sidebarUrlMatchesCurrent(item.element));
+    let index = urlIndex;
     if (index < 0) {
-      index = items.findIndex((item) => sidebarUrlMatchesCurrent(item.element));
+      const stateIndexes = [];
+      items.forEach((item, itemIndex) => {
+        if (sidebarState(item.element)) stateIndexes.push(itemIndex);
+      });
+      if (stateIndexes.length === 1) index = stateIndexes[0];
     }
     if (index < 0) {
       index = items.findIndex((item) => sidebarHasHighlight(item.element));
