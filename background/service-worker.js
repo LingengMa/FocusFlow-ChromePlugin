@@ -580,10 +580,14 @@ async function finishNeedsUser(message, settings, execution = null) {
 async function handleCycleError(error, settings) {
   const message = errorMessage(error);
   const runtime = await getRuntime();
-  if (settings?.selfHeal && /无法连接页面脚本/.test(message) && Number.isInteger(runtime.targetTabId)) {
+  if (settings?.selfHeal &&
+      /无法连接页面脚本/.test(message) &&
+      Number.isInteger(runtime.targetTabId) &&
+      (Number(runtime.errorCount) || 0) < 1) {
     try {
       await chrome.tabs.reload(runtime.targetTabId);
       await updateRuntime({
+        errorCount: 1,
         lastSelfHeal: {
           action: 'reload-tab',
           message: '页面脚本失联，已自动刷新并重试'
