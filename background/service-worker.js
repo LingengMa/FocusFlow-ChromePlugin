@@ -50,6 +50,7 @@ const QUIZ_VERIFY_ALARM = 'ff_quiz_verify';
 const AUTO_SUPPRESS_KEY = 'ff_auto_suppress';
 const MIN_ANALYSIS_GAP_MS = 6000;
 const EVENT_DEBOUNCE_MS = 1600;
+const HARD_BLOCK_RE = /登录|验证码|密码|扫码|人脸|授权|同意|支付|购买|删除|权限|证书|自动答题已关闭|自动提交已关闭|自动切换下一节已关闭|自动续播已关闭/;
 
 let inFlight = false;
 let rerunRequested = false;
@@ -533,8 +534,7 @@ function proactiveStopMessage({ snapshot, decision, settings, plan }) {
 
 async function trySelfHealNeedsUser({ message, url, tabId, settings }) {
   if (!settings.selfHeal) return false;
-  const hardBlock = /登录|验证码|密码|扫码|人脸|授权|同意|支付|购买|删除|权限|证书|自动答题已关闭|自动提交已关闭|自动切换下一节已关闭|自动续播已关闭/;
-  if (hardBlock.test(message || '')) return false;
+  if (HARD_BLOCK_RE.test(message || '')) return false;
 
   const runtime = await getRuntime();
   if ((Number(runtime.selfHealRetryCount) || 0) >= 2) return false;
@@ -822,10 +822,14 @@ async function runCycle(trigger, options = {}) {
       videoEnded &&
       !quizContext &&
       plan.actions.length === 0 &&
-      !plan.needsUser &&
-      !plan.haltAfterMessage;
+      !plan.haltAfterMessage &&
+      !HARD_BLOCK_RE.test(plan.message || '');
     if (shouldSynthesizeNext({ snapshot, decision, plan, runtime, settings }) ||
         shouldSynthesizeEndedNext) {
+      if (shouldSynthesizeEndedNext && plan.needsUser) {
+        plan.needsUser = false;
+        plan.message = '';
+      }
       plan.actions.push({
         type: 'next',
         frameId: 0,

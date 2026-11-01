@@ -2,6 +2,14 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.4] - 2026-11-02
+
+### Fixed
+
+- At video end, an AI `ask_user` response no longer prevents the sidebar
+  fallback. Unless the message is a hard blocker (login/captcha/settings), the
+  extension attempts the next numbered section automatically.
+
 ## [0.2.3] - 2026-11-02
 
 ### Fixed
