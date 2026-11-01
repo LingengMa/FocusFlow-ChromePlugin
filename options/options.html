@@ -146,6 +146,11 @@
               <span class="switch" aria-hidden="true"></span>
               <span class="toggle-copy"><strong>自主学习页面操作</strong><small>记录成功的视觉点击/滚动位置，下次在本站优先参考，不修改扩展源码</small></span>
             </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="debugLog">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="toggle-copy"><strong>记录诊断日志</strong><small>保存每轮 AI 原始分析、动作计划、执行结果和坐标，仅存本地，用于定位点击不准/跳节根因</small></span>
+            </label>
           </div>
 
           <div class="field" style="margin-bottom: 14px;">
@@ -236,10 +241,25 @@
           <h2>边界与隐私</h2>
           <ul class="checks">
             <li>页面文本被当作不可信数据，模型不能执行网页里的“指令”。</li>
-            <li>只允许点击快照中列出的元素；密码框、支付、删除、退课等控件会被拦截。</li>
+            <li>所有点击目标都来自截图坐标；支付、删除、退课、登录等危险文案会被策略拦截。</li>
             <li>截图和页面文本会发送到你配置的模型服务商，请自行确认其隐私政策。</li>
             <li>自动答题/提交可能违反课程平台规则；请只在明确允许的场景使用。</li>
           </ul>
+        </section>
+
+        <section class="card">
+          <div class="kicker">DIAGNOSTICS</div>
+          <h2>运行日志</h2>
+          <p class="side-note">包含 AI 原始分析、动作计划、执行结果和坐标；不包含 API Key/截图。仅本地保存。</p>
+          <div class="stack">
+            <div class="inline-actions">
+              <button class="btn secondary" id="refreshLogs" type="button">刷新日志</button>
+              <button class="btn secondary" id="exportLogs" type="button">导出日志</button>
+              <button class="btn danger-ghost" id="clearLogs" type="button">清空日志</button>
+            </div>
+            <span class="side-note" id="logStatus">尚未读取</span>
+            <pre class="log-view" id="logView">点击“刷新日志”查看最近决策。</pre>
+          </div>
         </section>
 
         <section class="card data-card">
@@ -257,7 +277,7 @@
         <section class="card about-card">
           <img src="../icons/icon48.png" alt="" class="mini-logo">
           <div>
-            <strong>FocusFlow <span id="aboutVersion">v0.3.0</span></strong>
+            <strong>FocusFlow <span id="aboutVersion">v0.3.1</span></strong>
             <small>Chrome MV3 · 本地运行 · 无遥测</small>
           </div>
         </section>

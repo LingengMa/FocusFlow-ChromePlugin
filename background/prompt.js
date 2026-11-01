@@ -169,6 +169,18 @@ export function buildUserPrompt({ snapshot, runtime, settings, siteMemory }) {
   }
   lines.push('');
 
+  if (snapshot.catalog?.detected) {
+    lines.push('【目录定位（状态参考）】');
+    lines.push(
+      `当前节：${snapshot.catalog.currentNumber || '?'} ${truncate(snapshot.catalog.currentTitle || '', 100)}` +
+      `；下一个未完成节：${snapshot.catalog.nextNumber || '无'} ${truncate(snapshot.catalog.nextTitle || '', 100)}`
+    );
+    if (Array.isArray(snapshot.catalog.completedNumbers) && snapshot.catalog.completedNumbers.length) {
+      lines.push(`已完成节：${snapshot.catalog.completedNumbers.slice(0, 20).join('、')}`);
+    }
+    lines.push('');
+  }
+
   lines.push('【答题界面检测】');
   if (quiz?.detected) {
     lines.push(`检测到答题界面（frame ${quiz.frameId}，启发式置信度 ${Math.round((quiz.score || 0) * 100)}%）。`);

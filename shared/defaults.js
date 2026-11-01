@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   selfHeal: true,
   skipStandaloneQuiz: true,
   learnSite: true,
+  debugLog: true,
 
   // Optional http(s) hostname allow-list. Empty means any http(s) page.
   allowedHosts: [],
@@ -217,6 +218,7 @@ export function normalizeSettings(raw = {}) {
     selfHeal: toBool(merged.selfHeal),
     skipStandaloneQuiz: toBool(merged.skipStandaloneQuiz),
     learnSite: toBool(merged.learnSite),
+    debugLog: toBool(merged.debugLog),
     allowedHosts: normalizeHostPatterns(merged.allowedHosts),
     extraPrompt: String(merged.extraPrompt || '').trim().slice(0, 2000)
   };

@@ -102,6 +102,11 @@ export function buildActionPlan({ decision, snapshot, settings }) {
   const quizFrame = Number.isInteger(snapshot?.quiz?.frameId) ? snapshot.quiz.frameId : videoFrame;
   const quizDetected = Boolean(snapshot?.quiz?.detected);
   const standaloneQuiz = Boolean(settings.skipStandaloneQuiz && !snapshot?.video?.found && quizDetected);
+  const catalog = snapshot?.catalog;
+  const expectedNextSection = catalog?.detected ? String(catalog.nextNumber || '') : '';
+  const completedSections = new Set(
+    Array.isArray(catalog?.completedNumbers) ? catalog.completedNumbers.map(String) : []
+  );
   const threshold = Number(settings.confidenceThreshold) || 0.72;
 
   if (decision.state === 'quiz' && !quizDetected) {
@@ -311,6 +316,19 @@ export function buildActionPlan({ decision, snapshot, settings }) {
         const isSubmit = /提交|交卷|确定|确认|submit|confirm/i.test(target);
         const isAnswer = QUIZ_TARGET_RE.test(target);
         const quizDetected = Boolean(snapshot?.quiz?.detected);
+        const sectionMatch = String(target).match(/(\d+(?:\.\d+)+)/);
+        const targetSection = sectionMatch?.[1] || '';
+
+        if (targetSection && expectedNextSection && targetSection !== expectedNextSection) {
+          warnings.push(
+            `目标节 ${targetSection} 不是下一个未完成节 ${expectedNextSection}，已拦截，避免跳过未播放内容。`
+          );
+          continue;
+        }
+        if (targetSection && completedSections.has(targetSection)) {
+          warnings.push(`目标节 ${targetSection} 已完成，已拦截。`);
+          continue;
+        }
 
         if (standaloneQuiz && (isSubmit || isAnswer)) {
           warnings.push('当前是独立章节测验，按“仅播放视频节”策略跳过，不执行答题。');

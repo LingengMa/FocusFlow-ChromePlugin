@@ -360,6 +360,31 @@ test('fill-in answers are routed to the quiz textarea', () => {
   assert.equal(plan.actions[0].text, '42');
 });
 
+test('catalog guard blocks jumping past the next unfinished section', () => {
+  const snapshot = makeSnapshot();
+  snapshot.video.ended = true;
+  snapshot.video.currentTime = snapshot.video.duration;
+  snapshot.catalog = {
+    detected: true,
+    currentNumber: '1.4',
+    currentTitle: '论文写作与发表',
+    nextNumber: '1.5',
+    nextTitle: '学术评审与学术不端',
+    completedNumbers: ['1.1', '1.2', '1.3', '1.4']
+  };
+  const plan = buildActionPlan({
+    decision: makeDecision([{
+      type: 'click_at',
+      bbox: [0.7, 0.6, 0.95, 0.65],
+      target: '2.3 韩国'
+    }], { state: 'ended' }),
+    snapshot,
+    settings: makeSettings({ clickMode: 'vision' })
+  });
+  assert.equal(plan.actions.length, 0);
+  assert.match(plan.warnings.join(' '), /不是下一个未完成节 1\.5/);
+});
+
 test('visual numbered section clicks are treated as next and blocked before the end', () => {
   const plan = buildActionPlan({
     decision: makeDecision([{

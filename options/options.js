@@ -31,7 +31,8 @@ const TOGGLES = [
   'autoStart',
   'selfHeal',
   'skipStandaloneQuiz',
-  'learnSite'
+  'learnSite',
+  'debugLog'
 ];
 
 let dirty = false;
@@ -174,6 +175,44 @@ async function testConnection() {
   }
 }
 
+async function refreshLogs() {
+  try {
+    const stored = await chrome.storage.local.get('ff_logs');
+    const logs = Array.isArray(stored?.ff_logs) ? stored.ff_logs : [];
+    $('logStatus').textContent = logs.length
+      ? `共 ${logs.length} 条，显示最近 ${Math.min(30, logs.length)} 条`
+      : '暂无日志；运行一轮分析后再刷新';
+    $('logView').textContent = logs.length
+      ? logs.slice(-30).map((item) => JSON.stringify(item, null, 2)).join('\n\n---\n\n')
+      : '暂无日志。';
+  } catch (error) {
+    $('logStatus').textContent = `读取失败：${String(error?.message || error)}`;
+  }
+}
+
+async function exportLogs() {
+  const stored = await chrome.storage.local.get('ff_logs');
+  const logs = Array.isArray(stored?.ff_logs) ? stored.ff_logs : [];
+  const blob = new Blob([JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    version: chrome.runtime.getManifest().version,
+    logs
+  }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `focusflow-logs-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function clearLogs() {
+  if (!confirm('清空本地诊断日志？此操作不可撤销。')) return;
+  await chrome.storage.local.remove('ff_logs');
+  await refreshLogs();
+  showToast('日志已清空');
+}
+
 async function refreshRuntime() {
   try {
     const response = await send({ type: 'FF_STATUS' });
@@ -277,6 +316,9 @@ function bind() {
     $('importFile').value = '';
   });
   $('resetBtn').addEventListener('click', resetSettings);
+  $('refreshLogs').addEventListener('click', refreshLogs);
+  $('exportLogs').addEventListener('click', exportLogs);
+  $('clearLogs').addEventListener('click', clearLogs);
   $('dismissWelcome').addEventListener('click', () => {
     $('welcome').classList.add('hidden');
     const url = new URL(location.href);
@@ -308,6 +350,7 @@ async function init() {
   bind();
   $('aboutVersion').textContent = `v${chrome.runtime.getManifest().version}`;
   await loadSettings();
+  await refreshLogs();
   if (new URL(location.href).searchParams.get('welcome') === '1') {
     $('welcome').classList.remove('hidden');
   }
