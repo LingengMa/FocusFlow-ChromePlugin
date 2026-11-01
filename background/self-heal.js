@@ -61,7 +61,11 @@ function queueUpdate(url, updater) {
       const diagnosis = updater(next) || null;
       next.updatedAt = Date.now();
       profiles[host] = next;
-      await saveProfiles(profiles);
+      try {
+        await saveProfiles(profiles);
+      } catch {
+        // Diagnosis still applies in-memory for this call; persistence is best-effort.
+      }
       return diagnosis;
     });
   return writeChain;

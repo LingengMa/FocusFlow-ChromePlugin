@@ -2,6 +2,14 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.2.1] - 2026-11-02
+
+### Fixed
+
+- Self-heal now reloads the page at most once for a content-script failure,
+  preventing an infinite reload loop.
+- Self-heal persistence failures no longer abort a running automation cycle.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added
