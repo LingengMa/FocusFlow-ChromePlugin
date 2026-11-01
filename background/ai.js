@@ -184,7 +184,11 @@ export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, run
   try {
     decision = parseModelResponse(response.content, { maxActions: settings.maxActions });
   } catch (error) {
-    if (!(error instanceof ProtocolError) || repaired) throw error;
+    if (!(error instanceof ProtocolError) || repaired) {
+      error.rawContent = response?.content || '';
+      error.requestId = response?.requestId || '';
+      throw error;
+    }
     repaired = true;
     const repairMessages = [
       ...messages,
@@ -206,7 +210,13 @@ export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, run
       total: usage.total + repair.usage.total
     };
     response = { ...repair, latencyMs: response.latencyMs + repair.latencyMs };
-    decision = parseModelResponse(repair.content, { maxActions: settings.maxActions });
+    try {
+      decision = parseModelResponse(repair.content, { maxActions: settings.maxActions });
+    } catch (repairError) {
+      repairError.rawContent = repair.content || '';
+      repairError.requestId = repair.requestId || '';
+      throw repairError;
+    }
   }
 
   return {

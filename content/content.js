@@ -36,6 +36,20 @@
     '[id*="question" i]'
   ].join(',');
 
+  const SIDEBAR_ITEM_SELECTOR = [
+    'a',
+    '[role="button"]',
+    '[onclick]',
+    'li',
+    '[data-url]',
+    '[data-href]',
+    '[class*="chapter" i]',
+    '[class*="catalog" i]',
+    '[class*="section" i]',
+    '[class*="item" i]',
+    '[class*="list" i]'
+  ].join(',');
+
   const OPTION_LIKE_SELECTOR = [
     '[class*="ans-item" i]',
     '[class*="answer-item" i]',
@@ -462,12 +476,14 @@
     const quiz = findQuiz();
     const controls = collectControls(quiz, primary);
     const pageText = collectPageText();
+    const isTop = window.top === window;
 
     return {
       ok: true,
       url: location.href,
       title: document.title,
-      isTop: window.top === window,
+      isTop,
+      catalog: isTop ? catalogSummary() : undefined,
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -770,6 +786,26 @@
     ) || null;
   }
 
+  function catalogSummary() {
+    const items = collectSidebarItems(SIDEBAR_ITEM_SELECTOR);
+    const current = findCurrentSidebarItem(items);
+    if (!current) {
+      return { detected: false, count: items.length };
+    }
+    const next = firstIncompleteAfter(items, current.number);
+    return {
+      detected: true,
+      count: items.length,
+      currentNumber: current.number,
+      currentTitle: current.title,
+      currentCompleted: Boolean(current.completed),
+      nextNumber: next?.number || '',
+      nextTitle: next?.title || '',
+      nextCompleted: next ? Boolean(next.completed) : null,
+      completedNumbers: items.filter((item) => item.completed).map((item) => item.number).slice(0, 40)
+    };
+  }
+
   /**
    * Some players (e.g. Chaoxing) have no "next" button in the video; the next
    * lesson is only in the right-hand chapter directory. Find the highlighted
@@ -778,19 +814,7 @@
    */
   async function findSidebarNextControl() {
     if (findQuiz()?.element) return null;
-    const selector = [
-      'a',
-      '[role="button"]',
-      '[onclick]',
-      'li',
-      '[data-url]',
-      '[data-href]',
-      '[class*="chapter" i]',
-      '[class*="catalog" i]',
-      '[class*="section" i]',
-      '[class*="item" i]',
-      '[class*="list" i]'
-    ].join(',');
+    const selector = SIDEBAR_ITEM_SELECTOR;
 
     let items = collectSidebarItems(selector);
     let current = findCurrentSidebarItem(items);

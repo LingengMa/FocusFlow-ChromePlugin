@@ -2,6 +2,22 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.3.1] - 2026-11-02
+
+### Added
+
+- Local diagnostic log (`ff_logs`) recording every AI raw response, normalized
+  decision, action plan, screenshot metadata, catalog state, execution result,
+  errors and self-heal actions.
+- Options-page log viewer with refresh, export and clear actions.
+- Catalog guard: vision clicks on numbered sections are rejected when they do
+  not match the next unfinished section, preventing accidental skip-ahead.
+
+### Changed
+
+- The prompt now receives current/next/completed section numbers as state
+  context, while targets remain screenshot coordinates.
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

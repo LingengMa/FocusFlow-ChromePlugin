@@ -10,3 +10,4 @@ import './service-worker.test.mjs';
 import './pointer.test.mjs';
 import './self-heal.test.mjs';
 import './site-memory.test.mjs';
+import './debug-log.test.mjs';

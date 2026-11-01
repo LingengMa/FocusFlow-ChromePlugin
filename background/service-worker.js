@@ -24,6 +24,7 @@ import { ApiError, analyzeWithAI, testConnection } from './ai.js';
 import { captureTab } from './capture.js';
 import { executePlan } from './executor.js';
 import { getSiteMemory, recordSiteActions } from './site-memory.js';
+import { appendDebugLog } from './debug-log.js';
 import { beginPointerSession, releasePointerSession } from './pointer.js';
 import {
   appendHistory,
@@ -435,6 +436,15 @@ async function stopAutomation({ status = RUNTIME_STATUS.IDLE, reason = '', notif
         : 'FocusFlow 已暂停';
     await notify(title, reason || '自动观看已停止');
   }
+  await appendDebugLog({
+    stage: 'stop',
+    status,
+    reason,
+    targetTabId: runtime.targetTabId || null,
+    targetUrl: runtime.targetUrl || '',
+    lastDecision: runtime.lastDecision || null,
+    lastSelfHeal: runtime.lastSelfHeal || null
+  });
   return runtime;
 }
 
@@ -582,8 +592,18 @@ async function finishNeedsUser(message, settings, execution = null) {
   });
 }
 
-async function handleCycleError(error, settings) {
+async function handleCycleError(error, settings, cycleId = '') {
   const message = errorMessage(error);
+  if (settings?.debugLog) {
+    await appendDebugLog({
+      stage: 'error',
+      cycleId,
+      message,
+      stack: String(error?.stack || '').slice(0, 3000),
+      rawContent: error?.rawContent || '',
+      status: error?.status || null
+    });
+  }
   const runtime = await getRuntime();
   if (settings?.selfHeal &&
       /无法连接页面脚本/.test(message) &&
@@ -681,6 +701,7 @@ async function runCycle(trigger, options = {}) {
   }
 
   const sessionStartedAt = before.startedAt;
+  const cycleId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   inFlight = true;
   lastAnalysisAt = Date.now();
   // Watchdog: if the MV3 worker is suspended in the middle of a cycle, this
@@ -889,6 +910,61 @@ async function runCycle(trigger, options = {}) {
       screenshot: { width: shot.width, height: shot.height, bytes: shot.bytes }
     };
 
+    if (settings.debugLog) {
+      const topFrame = (snapshot.frames || []).find((frame) => frame.isTop) || snapshot.frames?.[0];
+      await appendDebugLog({
+        stage: 'analysis',
+        cycleId,
+        trigger,
+        url,
+        title: snapshot.title,
+        viewport: snapshot.viewport,
+        screenshot: { width: shot.width, height: shot.height, bytes: shot.bytes },
+        video: snapshot.video,
+        quiz: {
+          detected: Boolean(snapshot.quiz?.detected),
+          score: snapshot.quiz?.score,
+          question: snapshot.quiz?.question,
+          text: String(snapshot.quiz?.text || '').slice(0, 3000)
+        },
+        catalog: snapshot.catalog || null,
+        pageText: String(topFrame?.pageText || '').slice(0, 3000),
+        ai: {
+          model: ai.model,
+          latencyMs: ai.latencyMs,
+          usage: ai.usage,
+          requestId: ai.requestId,
+          repaired: Boolean(ai.repaired),
+          rawContent: String(ai.content || '')
+        },
+        decision,
+        plan: {
+          summary,
+          actions: plan.actions,
+          warnings: plan.warnings,
+          needsUser: plan.needsUser,
+          haltAfterMessage: plan.haltAfterMessage
+        },
+        state: {
+          noVideoCount,
+          visionScrollCount,
+          courseComplete,
+          standaloneQuiz,
+          wantsNext
+        },
+        settings: {
+          model: settings.model,
+          clickMode: settings.clickMode,
+          confidenceThreshold: settings.confidenceThreshold,
+          autoAnswer: settings.autoAnswer,
+          autoSubmit: settings.autoSubmit,
+          autoNext: settings.autoNext,
+          autoResume: settings.autoResume,
+          skipStandaloneQuiz: settings.skipStandaloneQuiz
+        }
+      });
+    }
+
     runtime = await updateRuntime({
       status: plan.needsUser ? RUNTIME_STATUS.NEEDS_USER : RUNTIME_STATUS.ACTING,
       lastDecision,
@@ -1020,6 +1096,21 @@ async function runCycle(trigger, options = {}) {
       });
       if (learned) await updateRuntime({ siteMemory: learned });
     }
+    if (settings.debugLog) {
+      await appendDebugLog({
+        stage: 'result',
+        cycleId,
+        ok: execution.ok,
+        summary: execution.summary,
+        actions: plan.actions,
+        results: execution.results,
+        tab: tabAfter,
+        visionScrollCount,
+        nextAction,
+        scrollAction,
+        selfHeal: runtime.lastSelfHeal || null
+      });
+    }
     const historyEntry = {
       at: Date.now(),
       state: decision.state,
@@ -1133,7 +1224,7 @@ async function runCycle(trigger, options = {}) {
   } catch (error) {
     const current = await getRuntime();
     if (!current.running || current.startedAt !== sessionStartedAt) return;
-    await handleCycleError(error, settings);
+    await handleCycleError(error, settings, cycleId);
   } finally {
     inFlight = false;
     // Keep the MV3 worker alive for the short in-memory quiz verification

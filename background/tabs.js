@@ -205,6 +205,7 @@ export async function collectTabSnapshot(tab) {
   let primaryVideo = null;
   let primaryQuiz = null;
   let topViewport = null;
+  let topCatalog = null;
 
   for (const { frame, frameId, snapshot, error } of results) {
     if (!snapshot) {
@@ -222,6 +223,7 @@ export async function collectTabSnapshot(tab) {
     if (isTop && snapshot.viewport && !topViewport) {
       topViewport = snapshot.viewport;
     }
+    if (isTop && snapshot.catalog) topCatalog = snapshot.catalog;
     const frameControls = [];
 
     for (const control of Array.isArray(snapshot.controls) ? snapshot.controls : []) {
@@ -333,6 +335,7 @@ export async function collectTabSnapshot(tab) {
     url: tab.url || topFrame.url || '',
     title: tab.title || topFrame.title || '',
     viewport: topViewport || { width: 1280, height: 720, dpr: 1 },
+    catalog: topCatalog,
     frames: mergedFrames,
     video: primaryVideo || { found: false, frameId: 0 },
     quiz: primaryQuiz || { detected: false, frameId: 0, score: 0, choices: [], submitCandidates: [] },
