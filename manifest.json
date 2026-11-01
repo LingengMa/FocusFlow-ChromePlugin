@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FocusFlow 网课助手",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "定时截屏，由多模态 AI 判断继续播放、自动答题或切换下一节；直接使用当前 Chrome 的登录状态。",
   "minimum_chrome_version": "116",
   "permissions": [
