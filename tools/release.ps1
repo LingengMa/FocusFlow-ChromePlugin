@@ -23,10 +23,12 @@ if (git status --porcelain) {
   throw 'Working tree is not clean. Commit changes on dev first.'
 }
 
-if (-not (git rev-parse --verify dev 2>$null)) {
+git show-ref --verify --quiet refs/heads/dev
+if ($LASTEXITCODE -ne 0) {
   throw 'dev branch does not exist'
 }
-if (-not (git rev-parse --verify release 2>$null)) {
+git show-ref --verify --quiet refs/heads/release
+if ($LASTEXITCODE -ne 0) {
   git checkout -b release dev | Out-Null
 }
 
@@ -36,7 +38,6 @@ if (git tag --list $tag) {
 }
 
 git checkout dev | Out-Null
-$previous = git rev-parse --abbrev-ref HEAD
 try {
   git checkout release | Out-Null
   git merge --no-ff dev -m "release: $tag" | Out-Null
