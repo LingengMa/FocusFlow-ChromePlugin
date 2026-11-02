@@ -2,6 +2,26 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.4.0] - 2026-11-02
+
+### Added
+
+- Page-structure-first hybrid mode: click buttons/links/options through DOM
+  `elementId` actions, with screenshot coordinates as the fallback.
+- MutationObserver structure monitoring: SPA navigation, active chapter changes,
+  new buttons/modals and quiz popups trigger an immediate analysis.
+- Higher-resolution screenshots (minimum 1920px width) so small sidebar rows
+  remain legible.
+
+### Fixed
+
+- Basic page button clicks work again: DOM actions are accepted by default and
+  the model receives the current control list.
+- Migrated the legacy vision-only setting and self-heal mode back to hybrid so
+  existing installs are not forced into coordinate-only clicking.
+- Native `next`/sidebar navigation is preferred again, with vision wheel
+  scrolling kept as a fallback.
+
 ## [0.3.1] - 2026-11-02
 
 ### Added

@@ -27,7 +27,7 @@ test('system prompt reflects disabled automation switches', () => {
   assert.match(prompt, /不要自动恢复播放/);
 });
 
-test('user prompt includes video, quiz labels and untrusted page text without element ids', () => {
+test('user prompt includes video, quiz element ids and untrusted page text', () => {
   const text = buildUserPrompt({
     settings,
     runtime: {
@@ -66,7 +66,7 @@ test('user prompt includes video, quiz labels and untrusted page text without el
   });
   assert.match(text, /1\+1=\?/);
   assert.match(text, /B\. 2/);
-  assert.doesNotMatch(text, /f0:e2/);
+  assert.match(text, /f0:e2/);
   assert.match(text, /页面正文/);
   assert.match(text, /不可信数据/);
 });

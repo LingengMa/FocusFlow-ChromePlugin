@@ -52,7 +52,7 @@ test.beforeEach(() => {
   store.clear();
 });
 
-test('keeps vision mode and asks for a coordinate retry after failures', async () => {
+test('switches to DOM after two vision failures for the host', async () => {
   const first = await recordActionResults(COURSE_URL, [
     { type: 'click_at', ok: false, detail: 'coordinate miss' }
   ]);
@@ -61,18 +61,17 @@ test('keeps vision mode and asks for a coordinate retry after failures', async (
   const second = await recordActionResults(COURSE_URL, [
     { type: 'click_at', ok: false, detail: 'coordinate miss' }
   ]);
-  assert.equal(second.action, 'retry-vision');
-  assert.equal(second.mode, 'vision');
+  assert.equal(second.action, 'switch-click-mode');
+  assert.equal(second.mode, 'dom');
 
   const effective = await getEffectiveSettings(baseSettings, COURSE_URL);
-  assert.equal(effective.clickMode, 'vision');
-  assert.equal((await getSelfHealProfile(COURSE_URL)).lastDiagnosis.includes('视觉点击'), true);
+  assert.equal(effective.clickMode, 'dom');
 });
 
-test('legacy DOM failures do not switch away from vision', async () => {
+test('switches to vision after repeated DOM failures', async () => {
   await recordActionResults(COURSE_URL, [{ type: 'choose', ok: false }]);
   const diagnosis = await recordActionResults(COURSE_URL, [{ type: 'choose', ok: false }]);
-  assert.equal(diagnosis, null);
+  assert.equal(diagnosis.mode, 'vision');
   const effective = await getEffectiveSettings(baseSettings, COURSE_URL);
   assert.equal(effective.clickMode, 'vision');
 });

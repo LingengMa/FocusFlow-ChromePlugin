@@ -10,7 +10,7 @@ import {
 import { describeAction, truncate } from '../shared/ai-protocol.js';
 import { buildActionPlan, summarizePlan } from '../shared/planner.js';
 import { nextQuizCadence } from '../shared/quiz-followup.js';
-import { hasNextAction, looksCourseComplete } from '../shared/course-state.js';
+import { hasNextAction, looksCourseComplete, shouldSynthesizeNext } from '../shared/course-state.js';
 import { looksLikeCoursePage } from '../shared/course-detect.js';
 import {
   getEffectiveSettings,
@@ -459,9 +459,6 @@ async function startAutomation(tabId, options = {}) {
     throw new Error('请先打开课程网页（http/https），chrome:// 页面和扩展商店不能操作。');
   }
   settings = await getEffectiveSettings(settings, url);
-  // 0.3.x is pure vision: every target is chosen from the screenshot and
-  // dispatched as a coordinate mouse/wheel event.
-  settings = { ...settings, clickMode: 'vision' };
   if (!isHostAllowed(url, settings.allowedHosts)) {
     throw new Error(`当前网站 ${new URL(url).hostname} 不在允许列表中。请到设置中调整访问范围。`);
   }
@@ -758,7 +755,6 @@ async function runCycle(trigger, options = {}) {
     }
     const url = tab.url || tab.pendingUrl || '';
     settings = await getEffectiveSettings(settings, url);
-    settings = { ...settings, clickMode: 'vision' };
     if (!isHttpUrl(url)) {
       await stopAutomation({
         status: RUNTIME_STATUS.ERROR,
@@ -856,43 +852,41 @@ async function runCycle(trigger, options = {}) {
       const before = plan.actions.length;
       plan.actions = plan.actions.filter((action) =>
         action.type === 'scroll_at' ||
+        action.type === 'next' ||
         action.type === 'wait' ||
-        (action.type === 'click_at' && NAV_TARGET_RE.test(action.target || ''))
+        (action.type === 'click_at' && NAV_TARGET_RE.test(action.target || '')) ||
+        (action.type === 'click' && NAV_TARGET_RE.test(action.elementLabel || ''))
       );
       if (plan.actions.length !== before) {
         plan.warnings.push('当前是独立章节测验，按“仅播放视频节”跳过，不执行答题。');
       }
     }
 
-    // Do not trust a model's "complete" guess until we have actually tried to
-    // reveal more of the directory with a coordinate wheel event.
     const deferCompletionForNext = courseComplete &&
       settings.autoNext &&
-      wantsNext &&
-      visionScrollCount < 3;
-    const shouldScrollForNext = settings.autoNext &&
+      wantsNext;
+    const shouldSynthesizeEndedNext = (!courseComplete || deferCompletionForNext) &&
+      settings.autoNext &&
       wantsNext &&
       plan.actions.length === 0 &&
       !plan.haltAfterMessage &&
-      visionScrollCount < 3 &&
       !HARD_BLOCK_RE.test(plan.message || '');
-    if (shouldScrollForNext) {
+    let synthesizedNext = false;
+    if (shouldSynthesizeNext({ snapshot, decision, plan, runtime, settings }) ||
+        shouldSynthesizeEndedNext) {
       if (plan.needsUser) {
         plan.needsUser = false;
         plan.message = '';
       }
       plan.actions.push({
-        type: 'scroll_at',
-        bbox: [0.82, 0.34, 0.98, 0.74],
-        x: 0.9,
-        y: 0.55,
-        deltaY: 620,
-        target: '右侧目录'
+        type: 'next',
+        frameId: 0,
+        localId: '',
+        elementLabel: wantsNext ? '下一节（视觉/结构兜底）' : '下一节',
+        synthetic: true
       });
-      plan.warnings.push('用视觉坐标滚动右侧目录，查找下一个视频节。');
-    } else if (visionScrollCount >= 3 && plan.actions.some((action) => action.type === 'scroll_at')) {
-      plan.actions = plan.actions.filter((action) => action.type !== 'scroll_at');
-      plan.warnings.push('已滚动目录多次，停止继续滚动。');
+      plan.warnings.push('页面结构兜底：尝试点击下一节（含侧边栏目录）。');
+      synthesizedNext = true;
     }
 
     const summary = summarizePlan(plan);
@@ -928,6 +922,13 @@ async function runCycle(trigger, options = {}) {
           text: String(snapshot.quiz?.text || '').slice(0, 3000)
         },
         catalog: snapshot.catalog || null,
+        controls: (snapshot.controls || []).slice(0, 80).map((control) => ({
+          elementId: control.elementId,
+          tag: control.tag,
+          label: control.label,
+          group: control.group,
+          disabled: control.disabled
+        })),
         pageText: String(topFrame?.pageText || '').slice(0, 3000),
         ai: {
           model: ai.model,
@@ -988,20 +989,6 @@ async function runCycle(trigger, options = {}) {
       await stopAutomation({
         status: RUNTIME_STATUS.COMPLETED,
         reason: '所有视频节已完成，FocusFlow 已自动停止。',
-        notifyUser: true
-      });
-      return;
-    }
-
-    if (!courseComplete &&
-        wantsNext &&
-        visionScrollCount >= 3 &&
-        plan.actions.length === 0 &&
-        !plan.needsUser &&
-        !plan.haltAfterMessage) {
-      await stopAutomation({
-        status: RUNTIME_STATUS.COMPLETED,
-        reason: '已滚动目录多次，仍未发现后续视频节，按全部视频节完成停止。',
         notifyUser: true
       });
       return;
@@ -1136,6 +1123,18 @@ async function runCycle(trigger, options = {}) {
     }
 
     if (!execution.ok) {
+      if (synthesizedNext && /没有找到.*下一节|没有找到“下一节”/i.test(execution.message || '')) {
+        await updateRuntime({
+          lastError: execution.message,
+          lastActionSummary: '没有更多视频节'
+        });
+        await stopAutomation({
+          status: RUNTIME_STATUS.COMPLETED,
+          reason: '页面结构与侧边栏目录都没有找到下一节，按全部视频节完成停止。',
+          notifyUser: true
+        });
+        return;
+      }
       throw new Error(execution.message || '页面操作失败。');
     }
 
@@ -1269,7 +1268,7 @@ async function handleContentEvent(message, sender) {
   if (!event || !sender.tab?.id) return;
   const runtime = await getRuntime();
   if (!runtime.running || runtime.targetTabId !== sender.tab.id) return;
-  if (!['ended', 'quiz', 'dialog', 'pause', 'waiting', 'visibility'].includes(event.type)) return;
+  if (!['ended', 'quiz', 'dialog', 'pause', 'waiting', 'visibility', 'dom_change'].includes(event.type)) return;
   queueContentEvent(event.type);
 }
 
