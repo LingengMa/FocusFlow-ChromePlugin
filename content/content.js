@@ -18,6 +18,8 @@
   let lastWaitingAt = 0;
   let lastQuizSignature = '';
   let mutationTimer = null;
+  let lastStructureSignature = '';
+  let structureTimer = null;
 
   const QUIZ_SELECTOR = [
     '[role="dialog"]',
@@ -1366,6 +1368,74 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
+  /**
+   * Watch the actual page structure (not just quiz popups): SPA navigation,
+   * active chapter changes, new buttons/modals. This lets the background
+   * re-analyze immediately instead of waiting for the 45s poll.
+   */
+  function observeStructure() {
+    const signature = () => {
+      const quiz = findQuiz();
+      const active = document.querySelector(
+        '[class*="active" i], [class*="current" i], [class*="selected" i], [aria-current="true"]'
+      );
+      const controlCount = document.querySelectorAll(
+        'button, a, [role="button"], [role="radio"], [role="checkbox"], input:not([type="hidden"]), textarea'
+      ).length;
+      return [
+        location.href,
+        document.title,
+        quiz?.question || '',
+        quiz?.score || 0,
+        String(active?.innerText || '').replace(/\s+/g, ' ').slice(0, 100),
+        controlCount
+      ].join('|');
+    };
+
+    const schedule = () => {
+      if (structureTimer) return;
+      structureTimer = setTimeout(() => {
+        structureTimer = null;
+        const next = signature();
+        if (next === lastStructureSignature) return;
+        lastStructureSignature = next;
+        const quiz = findQuiz();
+        emitEvent('dom_change', {
+          url: location.href,
+          title: document.title,
+          hasQuiz: Boolean(quiz),
+          question: quiz?.question?.slice(0, 200) || '',
+          controlCount: document.querySelectorAll('button, a, [role="button"]').length
+        });
+      }, 900);
+    };
+
+    try {
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          const target = mutation.target instanceof Element
+            ? mutation.target
+            : mutation.target.parentElement;
+          if (target?.closest?.(`#${HUD_ID}`)) continue;
+          if (mutation.type === 'childList' || mutation.type === 'attributes') {
+            schedule();
+            return;
+          }
+        }
+      });
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden', 'aria-current', 'aria-selected', 'aria-expanded']
+      });
+      setInterval(schedule, 2500);
+      lastStructureSignature = signature();
+    } catch {
+      // MutationObserver is best-effort in exotic frames.
+    }
+  }
+
   function ensureHud() {
     if (hudHost?.isConnected) return;
     hudHost = document.createElement('div');
@@ -1539,4 +1609,5 @@
 
   attachMediaEvents();
   observeQuiz();
+  observeStructure();
 })();

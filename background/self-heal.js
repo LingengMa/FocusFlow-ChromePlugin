@@ -47,6 +47,7 @@ function queueUpdate(url, updater) {
       const next = {
         host,
         clickMode: '',
+        modeVersion: 0,
         modeUntil: 0,
         visionFailures: 0,
         domFailures: 0,
@@ -71,6 +72,12 @@ function queueUpdate(url, updater) {
   return writeChain;
 }
 
+function alternateMode(mode) {
+  if (mode === 'vision') return 'dom';
+  if (mode === 'dom') return 'vision';
+  return 'vision';
+}
+
 export async function getSelfHealProfile(url) {
   const host = hostOf(url);
   if (!host) return null;
@@ -85,8 +92,9 @@ export async function getEffectiveSettings(settings, url) {
   if (!profile) return settings;
   const now = Date.now();
   const next = { ...settings };
-  // 0.3.x is vision-only; never switch to DOM targeting from the profile.
-  next.clickMode = 'vision';
+  if (Number(profile.modeVersion) >= 2 && profile.clickMode && Number(profile.modeUntil) > now) {
+    next.clickMode = profile.clickMode;
+  }
   if (Number(profile.backoffUntil) > now && Number(profile.intervalMultiplier) > 1) {
     next.intervalSeconds = Math.min(
       3600,
@@ -112,20 +120,36 @@ export function recordActionResults(url, results) {
         } else {
           profile.visionFailures = (Number(profile.visionFailures) || 0) + 1;
           if (profile.visionFailures >= 2) {
-            profile.clickMode = 'vision';
+            profile.clickMode = 'dom';
+            profile.modeVersion = 2;
             profile.modeUntil = Date.now() + MODE_TTL_MS;
             profile.visionFailures = 0;
-            profile.lastDiagnosis = '视觉点击连续失败，下一轮调整坐标/滚动位置重试';
+            profile.lastDiagnosis = '视觉点击连续失败，自动切换为 DOM 点击';
             diagnosis = {
               host: profile.host,
-              action: 'retry-vision',
-              mode: 'vision',
+              action: 'switch-click-mode',
+              mode: 'dom',
               message: profile.lastDiagnosis
             };
           }
         }
       } else if (result.ok) {
         profile.domFailures = 0;
+      } else {
+        profile.domFailures = (Number(profile.domFailures) || 0) + 1;
+        if (profile.domFailures >= 2 && profile.clickMode !== 'vision') {
+          profile.clickMode = 'vision';
+          profile.modeVersion = 2;
+          profile.modeUntil = Date.now() + MODE_TTL_MS;
+          profile.domFailures = 0;
+          profile.lastDiagnosis = 'DOM 点击连续失败，自动切换为视觉坐标';
+          diagnosis = {
+            host: profile.host,
+            action: 'switch-click-mode',
+            mode: 'vision',
+            message: profile.lastDiagnosis
+          };
+        }
       }
     }
     return diagnosis;
@@ -167,10 +191,11 @@ export function recordQuizRetryLimit(url) {
     const now = Date.now();
     if (now - Number(profile.lastQuizHealAt) < 10 * 60 * 1000) return null;
     profile.lastQuizHealAt = now;
-    const mode = 'vision';
+    const mode = alternateMode(profile.clickMode || 'hybrid');
     profile.clickMode = mode;
+    profile.modeVersion = 2;
     profile.modeUntil = now + MODE_TTL_MS;
-    profile.lastDiagnosis = '答题连续未通过，自动调整坐标并重试';
+    profile.lastDiagnosis = `答题连续未通过，自动切换为 ${mode} 模式重试`;
     return {
       host: profile.host,
       action: 'quiz-retry-mode',
@@ -186,10 +211,11 @@ export function recordNeedsUserRecovery(url) {
     const now = Date.now();
     if (now - Number(profile.lastNeedsHealAt) < 10 * 60 * 1000) return null;
     profile.lastNeedsHealAt = now;
-    const mode = 'vision';
+    const mode = alternateMode(profile.clickMode || 'hybrid');
     profile.clickMode = mode;
+    profile.modeVersion = 2;
     profile.modeUntil = now + MODE_TTL_MS;
-    profile.lastDiagnosis = 'AI 请求人工确认，自动调整视觉策略重试';
+    profile.lastDiagnosis = `AI 请求人工确认，自动切换为 ${mode} 模式重试`;
     return {
       host: profile.host,
       action: 'needs-user-mode',

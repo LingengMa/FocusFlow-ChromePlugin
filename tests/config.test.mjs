@@ -59,8 +59,9 @@ test('normalizeSettings converts string booleans safely', () => {
   assert.equal(settings.autoNext, true);
 });
 
-test('normalizeSettings validates click mode', () => {
-  assert.equal(normalizeSettings({ clickMode: 'vision' }).clickMode, 'vision');
-  assert.equal(normalizeSettings({ clickMode: 'dom' }).clickMode, 'dom');
-  assert.equal(normalizeSettings({ clickMode: 'nonsense' }).clickMode, 'vision');
+test('normalizeSettings validates click mode and migrates legacy vision-only', () => {
+  assert.equal(normalizeSettings({ clickMode: 'vision', settingsVersion: 2 }).clickMode, 'vision');
+  assert.equal(normalizeSettings({ clickMode: 'dom', settingsVersion: 2 }).clickMode, 'dom');
+  assert.equal(normalizeSettings({ clickMode: 'vision' }).clickMode, 'hybrid');
+  assert.equal(normalizeSettings({ clickMode: 'nonsense' }).clickMode, 'hybrid');
 });

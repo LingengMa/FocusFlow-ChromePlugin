@@ -153,11 +153,15 @@
             </label>
           </div>
 
-          <div class="field" style="margin-bottom: 14px;">
+          <label class="field" style="margin-bottom: 14px;">
             <span>点击方式</span>
-            <strong>纯视觉坐标（固定）</strong>
-            <small>所有操作都由截图识别目标，再用 CDP 在坐标处发送真实鼠标点击/滚轮；不再依赖 DOM 选择器。需要 <code>debugger</code> 权限。</small>
-          </div>
+            <select id="clickMode">
+              <option value="hybrid">页面结构优先 + 截图兜底（推荐）</option>
+              <option value="vision">仅截图坐标</option>
+              <option value="dom">仅页面结构</option>
+            </select>
+            <small>优先直接点击页面结构中识别到的按钮/链接；截图用于分析和 DOM 不可达时的坐标兜底。需要 <code>debugger</code> 权限。</small>
+          </label>
 
           <div class="grid three">
             <label class="field">
@@ -277,7 +281,7 @@
         <section class="card about-card">
           <img src="../icons/icon48.png" alt="" class="mini-logo">
           <div>
-            <strong>FocusFlow <span id="aboutVersion">v0.3.1</span></strong>
+            <strong>FocusFlow <span id="aboutVersion">v0.4.0</span></strong>
             <small>Chrome MV3 · 本地运行 · 无遥测</small>
           </div>
         </section>

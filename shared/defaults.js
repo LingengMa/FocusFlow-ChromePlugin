@@ -15,11 +15,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   apiBaseUrl: 'https://api.deepseek.com/v1',
   apiKey: '',
   model: 'deepseek-v4.1-flash',
+  settingsVersion: 2,
 
   // Capture / cadence
   intervalSeconds: 45,
-  maxImageWidth: 1280,
-  jpegQuality: 78,
+  maxImageWidth: 1920,
+  jpegQuality: 85,
   requestTimeoutSeconds: 90,
 
   // Automation policy
@@ -33,7 +34,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   quizVerifySeconds: 4,
   // hybrid = vision coordinates with DOM fallback; vision = coordinates only;
   // dom = legacy elementId actions.
-  clickMode: 'vision',
+  clickMode: 'hybrid',
 
   // Browser / UI behaviour
   focusTarget: true,
@@ -157,9 +158,14 @@ export function normalizeHostPatterns(value) {
 export function normalizeSettings(raw = {}) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const merged = { ...DEFAULT_SETTINGS, ...source };
+  const sourceVersion = Number(source.settingsVersion) || 0;
+  const requestedClickMode = ['hybrid', 'vision', 'dom'].includes(merged.clickMode)
+    ? merged.clickMode
+    : DEFAULT_SETTINGS.clickMode;
 
   return {
     ...merged,
+    settingsVersion: 2,
     apiBaseUrl: normalizeBaseUrl(merged.apiBaseUrl),
     apiKey: String(merged.apiKey || '').trim(),
     model: String(merged.model || DEFAULT_SETTINGS.model).trim().slice(0, 120) ||
@@ -208,9 +214,11 @@ export function normalizeSettings(raw = {}) {
     autoAnswer: toBool(merged.autoAnswer),
     autoSubmit: toBool(merged.autoSubmit),
     autoNext: toBool(merged.autoNext),
-    clickMode: ['hybrid', 'vision', 'dom'].includes(merged.clickMode)
-      ? merged.clickMode
-      : DEFAULT_SETTINGS.clickMode,
+    // 0.3.x briefly persisted vision-only mode as the default. Migrate that
+    // legacy value once; an explicit new setting can still choose vision.
+    clickMode: sourceVersion < 2 && requestedClickMode === 'vision'
+      ? 'hybrid'
+      : requestedClickMode,
     focusTarget: toBool(merged.focusTarget),
     hud: toBool(merged.hud),
     dryRun: toBool(merged.dryRun),

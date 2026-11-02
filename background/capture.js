@@ -92,7 +92,10 @@ export async function captureTab(tab, settings) {
 
   const raw = await captureRaw(tab, settings.jpegQuality);
   try {
-    return await downscale(raw, settings.maxImageWidth, settings.jpegQuality);
+    // Keep at least a 1920px-wide screenshot so small sidebar rows/buttons
+    // remain legible to the vision model; screenshots are auxiliary to DOM.
+    const maxWidth = Math.max(1920, Number(settings.maxImageWidth) || 0);
+    return await downscale(raw, maxWidth, settings.jpegQuality);
   } catch {
     return { dataUrl: raw, width: 0, height: 0, bytes: raw.length };
   }
