@@ -19,6 +19,8 @@
   let lastQuizSignature = '';
   let mutationTimer = null;
   let lastStructureSignature = '';
+  let lastStructureState = null;
+  let lastStructureEmitAt = 0;
   let structureTimer = null;
 
   const QUIZ_SELECTOR = [
@@ -1374,40 +1376,55 @@
    * re-analyze immediately instead of waiting for the 45s poll.
    */
   function observeStructure() {
-    const signature = () => {
+    const describe = () => {
       const quiz = findQuiz();
-      const active = document.querySelector(
-        '[class*="active" i], [class*="current" i], [class*="selected" i], [aria-current="true"]'
-      );
-      const controlCount = document.querySelectorAll(
-        'button, a, [role="button"], [role="radio"], [role="checkbox"], input:not([type="hidden"]), textarea'
-      ).length;
-      return [
-        location.href,
-        document.title,
-        quiz?.question || '',
-        quiz?.score || 0,
-        String(active?.innerText || '').replace(/\s+/g, ' ').slice(0, 100),
-        controlCount
-      ].join('|');
+      const catalog = catalogSummary();
+      const dialog = document.querySelector('dialog[open], [role="dialog"], [class*="modal" i], [class*="popup" i]');
+      return {
+        url: location.href,
+        title: document.title,
+        quiz: quiz ? `${quiz.score}|${quiz.question}` : '',
+        catalog: catalog.detected
+          ? `${catalog.currentNumber || ''}|${catalog.nextNumber || ''}|${catalog.count || 0}`
+          : `none:${catalog.count || 0}`,
+        dialog: Boolean(dialog)
+      };
     };
 
     const schedule = () => {
       if (structureTimer) return;
       structureTimer = setTimeout(() => {
         structureTimer = null;
-        const next = signature();
-        if (next === lastStructureSignature) return;
-        lastStructureSignature = next;
-        const quiz = findQuiz();
+        const next = describe();
+        const signature = JSON.stringify(next);
+        if (signature === lastStructureSignature) return;
+
+        const previous = lastStructureState;
+        lastStructureSignature = signature;
+        lastStructureState = next;
+        const kind = previous?.url !== next.url || previous?.title !== next.title
+          ? 'navigation'
+          : previous?.quiz !== next.quiz
+            ? 'quiz'
+            : next.dialog && previous?.dialog !== next.dialog
+              ? 'dialog'
+              : 'catalog';
+
+        // A generic DOM/class mutation is not a reason to spend an API call.
+        // Only navigation, quiz, dialog and real catalog changes are significant,
+        // and catalog changes are rate-limited independently.
+        const now = Date.now();
+        if (kind === 'catalog' && now - lastStructureEmitAt < 20000) return;
+        lastStructureEmitAt = now;
         emitEvent('dom_change', {
-          url: location.href,
-          title: document.title,
-          hasQuiz: Boolean(quiz),
-          question: quiz?.question?.slice(0, 200) || '',
-          controlCount: document.querySelectorAll('button, a, [role="button"]').length
+          kind,
+          url: next.url,
+          title: next.title,
+          hasQuiz: Boolean(next.quiz),
+          catalog: next.catalog,
+          dialog: next.dialog
         });
-      }, 900);
+      }, 1200);
     };
 
     try {
@@ -1429,8 +1446,9 @@
         attributes: true,
         attributeFilter: ['class', 'style', 'hidden', 'aria-current', 'aria-selected', 'aria-expanded']
       });
-      setInterval(schedule, 2500);
-      lastStructureSignature = signature();
+      setInterval(schedule, 4000);
+      lastStructureState = describe();
+      lastStructureSignature = JSON.stringify(lastStructureState);
     } catch {
       // MutationObserver is best-effort in exotic frames.
     }

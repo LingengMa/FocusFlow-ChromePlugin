@@ -88,6 +88,7 @@ export function defaultRuntime() {
     probeReason: '',
     noVideoCount: 0,
     visionScrollCount: 0,
+    sectionProbeCount: 0,
     siteMemory: null,
     autoStarted: false,
     selfHealRetryCount: 0,

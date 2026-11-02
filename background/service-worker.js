@@ -61,6 +61,7 @@ let eventTimer = null;
 let quizVerifyTimer = null;
 let autoStartTimer = null;
 let lastAnalysisAt = 0;
+let lastStructureEventAt = 0;
 let lastNotificationAt = 0;
 let keepAlivePort = null;
 
@@ -888,6 +889,10 @@ async function runCycle(trigger, options = {}) {
       plan.warnings.push('页面结构兜底：尝试点击下一节（含侧边栏目录）。');
       synthesizedNext = true;
     }
+    if (visionScrollCount >= 3 && plan.actions.some((action) => action.type === 'scroll_at')) {
+      plan.actions = plan.actions.filter((action) => action.type !== 'scroll_at');
+      plan.warnings.push('已滚动目录多次，停止继续滚动。');
+    }
 
     const summary = summarizePlan(plan);
     const lastDecision = {
@@ -1138,6 +1143,13 @@ async function runCycle(trigger, options = {}) {
       throw new Error(execution.message || '页面操作失败。');
     }
 
+    const navigationChanged = Boolean(nextAction) &&
+      (tabAfter?.url !== runtime.targetUrl || tabAfter?.title !== runtime.targetTitle);
+    const nextStuck = Boolean(nextAction) && !navigationChanged;
+    const sectionProbeCount = nextStuck
+      ? (Number(runtime.sectionProbeCount) || 0) + 1
+      : 0;
+
     await updateRuntime({
       status: RUNTIME_STATUS.WATCHING,
       cycleCount: (Number(runtime.cycleCount) || 0) + 1,
@@ -1156,6 +1168,7 @@ async function runCycle(trigger, options = {}) {
         : nextAction || (snapshot.video?.found && !videoEnded)
           ? 0
           : visionScrollCount,
+      sectionProbeCount,
       selfHealRetryCount: 0,
       history
     });
@@ -1191,6 +1204,15 @@ async function runCycle(trigger, options = {}) {
       await stopAutomation({
         status: RUNTIME_STATUS.NEEDS_USER,
         reason: cadence.reason || '答题多次复查仍未通过，请手动检查。',
+        notifyUser: true
+      });
+      return;
+    }
+
+    if (nextStuck && sectionProbeCount >= 2) {
+      await stopAutomation({
+        status: RUNTIME_STATUS.NEEDS_USER,
+        reason: '已连续点击下一节，但页面 URL/标题没有变化；为避免 3–5 秒高频巡检，已停止并等待确认。',
         notifyUser: true
       });
       return;
@@ -1244,16 +1266,17 @@ async function runCycle(trigger, options = {}) {
   }
 }
 
-function queueContentEvent(type) {
+function queueContentEvent(type, extraDelay = 0) {
   const delays = {
     ended: 900,
     quiz: 1100,
     visibility: 700,
     dialog: 1400,
     pause: 2400,
-    waiting: 6500
+    waiting: 6500,
+    dom_change: 2600
   };
-  const base = delays[type] || 1800;
+  const base = Math.max(delays[type] || 1800, Number(extraDelay) || 0);
   const waitForGap = Math.max(0, MIN_ANALYSIS_GAP_MS - (Date.now() - lastAnalysisAt));
   const delay = Math.max(base, waitForGap);
   if (eventTimer) clearTimeout(eventTimer);
@@ -1269,6 +1292,15 @@ async function handleContentEvent(message, sender) {
   const runtime = await getRuntime();
   if (!runtime.running || runtime.targetTabId !== sender.tab.id) return;
   if (!['ended', 'quiz', 'dialog', 'pause', 'waiting', 'visibility', 'dom_change'].includes(event.type)) return;
+  if (event.type === 'dom_change') {
+    const now = Date.now();
+    // Structure events are useful, but a video player mutates its DOM
+    // constantly. Never let generic mutations turn the 120s poll into a 3s one.
+    if (now - lastStructureEventAt < 20000) return;
+    lastStructureEventAt = now;
+    queueContentEvent('dom_change', event.kind === 'navigation' ? 800 : 1800);
+    return;
+  }
   queueContentEvent(event.type);
 }
 
