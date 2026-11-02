@@ -2,6 +2,18 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.4.1] - 2026-11-02
+
+### Fixed
+
+- High-frequency polling: generic DOM mutations no longer trigger analysis.
+  Structure events are limited to navigation, quiz, dialog and real catalog
+  changes, with a 20-second cooldown; catalog changes are also debounced in the
+  content script.
+- Prevented a 5-second section-probe loop when clicking next does not change the
+  page URL/title: after two stuck attempts the extension stops for confirmation.
+- Prevented endless 2-second scroll probes after three coordinate scrolls.
+
 ## [0.4.0] - 2026-11-02
 
 ### Added
