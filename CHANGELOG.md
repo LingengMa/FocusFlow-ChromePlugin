@@ -2,6 +2,17 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.5.0] - 2026-11-02
+
+### Added
+
+- Detect in-section tabs such as “1 学习目标 / 2 视频 / 3 章节测验”.
+- Automatically switch to the video tab before playback, even if another tab
+  (goals or chapter quiz) is selected.
+- Ignore the chapter-quiz tab and chapter-quiz section entries; only video
+  sections are played.
+- Expose tab state and coordinates to the model as auxiliary context.
+
 ## [0.4.1] - 2026-11-02
 
 ### Fixed

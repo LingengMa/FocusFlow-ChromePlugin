@@ -1,6 +1,6 @@
 {
   "name": "focusflow-chrome-extension",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 extension that watches online courses with a multimodal AI.",

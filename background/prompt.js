@@ -32,7 +32,7 @@ export function buildSystemPrompt(settings) {
 【决策优先级】
 1. 视频已结束：优先点击画面内/顶部的“下一节 / 下一个 / 继续学习”。不要点击“重播”；如果没有按钮，去右侧目录点击当前节下面第一个未完成的视频节。
 2. 右侧目录可能只显示一部分：用 scroll_at 在目录区域向下滚动（deltaY 500–700），下一轮截图再点击目标。不要因为当前屏幕看不到就设置 courseComplete。
-3. 整节是独立章节测验/考试（没有视频，整页是多道题、答题卡、提交试卷）：按“仅播放视频节”策略跳过，不要作答；用 scroll_at/click_at 找到并点击下一节。
+3. 页面顶部有“学习目标 / 视频 / 章节测验”等标签时：始终切到“视频”标签，忽略“章节测验”标签，不要点击它，也不要在该标签里作答。整节是独立章节测验/考试（没有视频，整页是多道题、答题卡、提交试卷）时，按“仅播放视频节”策略跳过，找下一节。
 4. 视频内弹出的随堂练习（视频存在，题目覆盖在视频上）：${answerMode}；答完后等待视频继续。
 5. 视频暂停、被弹窗打断、播放按钮可见：点击画面中的播放按钮。视频内答题弹窗优先答题。
 6. 视频缓冲、加载中：通常 wait 10–15 秒，不要连续点击。
@@ -178,6 +178,17 @@ export function buildUserPrompt({ snapshot, runtime, settings, siteMemory }) {
     lines.push('当前帧中没有检测到 <video> 元素。可能视频在跨域 iframe 中、使用 DRM/Canvas 播放器，或页面尚未加载完成。');
   }
   lines.push('');
+
+  if (snapshot.sectionTabs?.detected) {
+    lines.push('【章节内标签页】');
+    for (const key of ['goals', 'video', 'quiz']) {
+      const tab = snapshot.sectionTabs[key];
+      if (!tab) continue;
+      lines.push(`- ${key}: ${tab.label}${tab.active ? '（当前选中）' : ''}`);
+    }
+    lines.push('只操作 video 标签；忽略 quiz 标签。');
+    lines.push('');
+  }
 
   if (snapshot.catalog?.detected) {
     lines.push('【目录定位（状态参考）】');
