@@ -186,6 +186,14 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           warnings.push(`元素“${elementLabel(entry)}”被安全策略禁止点击。`);
           continue;
         }
+        if (
+          settings.skipStandaloneQuiz &&
+          entry.group !== 'quiz' &&
+          /(?:^|(?:第\s*)?\d+(?:\.\d+)*\s*)(章节测验|章节测试|考试)$/i.test(elementLabel(entry))
+        ) {
+          warnings.push('“仅播放视频节”已开启，章节测验入口已忽略。');
+          continue;
+        }
         if (decision.confidence < 0.5) {
           return needsHuman(
             `AI 想点击“${elementLabel(entry)}”，但置信度只有 ${Math.round(decision.confidence * 100)}%。请确认。`,
@@ -330,6 +338,13 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           continue;
         }
 
+        if (
+          settings.skipStandaloneQuiz &&
+          /(?:^|(?:第\s*)?\d+(?:\.\d+)*\s*)(章节测验|章节测试|考试)$/i.test(target)
+        ) {
+          warnings.push('“仅播放视频节”已开启，章节测验入口已忽略。');
+          continue;
+        }
         if (standaloneQuiz && (isSubmit || isAnswer)) {
           warnings.push('当前是独立章节测验，按“仅播放视频节”策略跳过，不执行答题。');
           continue;

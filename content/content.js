@@ -398,6 +398,7 @@
       '[role="checkbox"]',
       '[role="menuitem"]',
       '[role="tab"]',
+      '[class*="tab" i]',
       '[contenteditable="true"]',
       '[onclick]',
       '[class*="next" i]',
@@ -488,6 +489,7 @@
       title: document.title,
       isTop,
       catalog: isTop ? catalogSummary() : undefined,
+      sectionTabs: isTop ? findSectionTabs() : undefined,
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -788,6 +790,80 @@
       !item.completed &&
       !hasLockedAncestor(item.element)
     ) || null;
+  }
+
+  function sectionTabState(element) {
+    let current = element;
+    for (let depth = 0; depth < 4 && current; depth += 1) {
+      const className = String(current.className || '');
+      if (
+        /(?:^|[\s_-])(?:active|current|selected|on)(?:$|[\s_-])/i.test(className) ||
+        current.getAttribute?.('aria-selected') === 'true' ||
+        current.getAttribute?.('aria-current') === 'true'
+      ) {
+        return true;
+      }
+      const style = getComputedStyle(current);
+      const bg = String(style.backgroundColor || '');
+      if (
+        !/rgba?\(0,\s*0,\s*0,\s*0\)|transparent|rgb\(255,\s*255,\s*255\)/i.test(bg) &&
+        current.getBoundingClientRect().height < 90
+      ) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function findSectionTabs() {
+    const tabPattern = /^(?:\d+\s*)?(学习目标|视频|章节测验|章节测试|测验|考试)$/;
+    const candidates = [];
+    const seen = new Set();
+    for (const element of document.querySelectorAll(
+      'a, button, [role="tab"], li, [class*="tab" i], [class*="nav" i]'
+    )) {
+      if (seen.has(element) || !isRendered(element)) continue;
+      const text = textOf(element, 40).replace(/\s+/g, ' ').trim();
+      if (!tabPattern.test(text)) continue;
+      seen.add(element);
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 360 || rect.height > 80) continue;
+      let score = 0;
+      if (['A', 'BUTTON'].includes(element.tagName)) score += 3;
+      if (element.getAttribute?.('role') === 'tab') score += 3;
+      if (/tab|nav/i.test(String(element.className || ''))) score += 2;
+      score -= Math.min(2, Math.round(rect.width / 150));
+      candidates.push({
+        element,
+        label: text,
+        active: sectionTabState(element),
+        score
+      });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const result = { detected: candidates.length > 0 };
+    for (const item of candidates) {
+      const kind = /学习目标/.test(item.label)
+        ? 'goals'
+        : /视频/.test(item.label)
+          ? 'video'
+          : 'quiz';
+      if (result[kind]) continue;
+      const rect = item.element.getBoundingClientRect();
+      result[kind] = {
+        elementId: idFor(item.element),
+        label: item.label,
+        active: item.active,
+        bbox: [
+          Math.max(0, rect.left) / Math.max(1, window.innerWidth),
+          Math.max(0, rect.top) / Math.max(1, window.innerHeight),
+          Math.min(window.innerWidth, rect.right) / Math.max(1, window.innerWidth),
+          Math.min(window.innerHeight, rect.bottom) / Math.max(1, window.innerHeight)
+        ]
+      };
+    }
+    return result.detected ? result : { detected: false };
   }
 
   function catalogSummary() {

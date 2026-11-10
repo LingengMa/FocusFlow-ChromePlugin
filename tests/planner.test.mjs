@@ -360,6 +360,18 @@ test('fill-in answers are routed to the quiz textarea', () => {
   assert.equal(plan.actions[0].text, '42');
 });
 
+test('chapter-quiz tab clicks are ignored in video-only mode', () => {
+  const snapshot = makeSnapshot();
+  snapshot.elementIndex.get('f0:e4').label = '3 章节测验';
+  const plan = buildActionPlan({
+    decision: makeDecision([{ type: 'click', elementId: 'f0:e4' }], { state: 'playing' }),
+    snapshot,
+    settings: makeSettings({ clickMode: 'hybrid', skipStandaloneQuiz: true })
+  });
+  assert.equal(plan.actions.length, 0);
+  assert.match(plan.warnings.join(' '), /章节测验入口已忽略/);
+});
+
 test('catalog guard blocks jumping past the next unfinished section', () => {
   const snapshot = makeSnapshot();
   snapshot.video.ended = true;

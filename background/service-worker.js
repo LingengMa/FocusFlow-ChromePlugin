@@ -843,13 +843,41 @@ async function runCycle(trigger, options = {}) {
     );
     const noVideo = !snapshot.video?.found;
     const standaloneQuiz = Boolean(settings.skipStandaloneQuiz && noVideo && quizContext);
+    const videoTab = snapshot.sectionTabs?.video;
+    const videoTabEntry = videoTab?.elementId
+      ? snapshot.elementIndex?.get(videoTab.elementId)
+      : null;
+    const videoTabAction = Boolean(
+      videoTab && !videoTab.active && (videoTabEntry || videoTab.bbox)
+    );
+    if (videoTabAction) {
+      plan.actions = [videoTabEntry
+        ? {
+            type: 'click',
+            elementId: videoTab.elementId,
+            frameId: videoTabEntry.frameId,
+            localId: videoTabEntry.localId,
+            elementLabel: videoTab.label || '视频'
+          }
+        : {
+            type: 'click_at',
+            bbox: videoTab.bbox,
+            x: (videoTab.bbox[0] + videoTab.bbox[2]) / 2,
+            y: (videoTab.bbox[1] + videoTab.bbox[3]) / 2,
+            target: videoTab.label || '视频标签'
+          }];
+      plan.needsUser = false;
+      plan.message = '';
+      plan.haltAfterMessage = '';
+      plan.warnings.push('检测到“学习目标/视频/章节测验”标签页，先切换到视频标签。');
+    }
     const visionScrollCount = Number(runtime.visionScrollCount) || 0;
     const noVideoReady = standaloneQuiz || noVideoCount >= 2;
     const wantsNext = videoEnded || (noVideo && noVideoReady);
 
     // “Only play video sections”: a standalone chapter quiz is not answered.
     // Keep only navigation/scroll actions, then look for a video section.
-    if (standaloneQuiz) {
+    if (standaloneQuiz && !videoTabAction) {
       const before = plan.actions.length;
       plan.actions = plan.actions.filter((action) =>
         action.type === 'scroll_at' ||
@@ -985,7 +1013,7 @@ async function runCycle(trigger, options = {}) {
       detail: decision.reason
     });
 
-    if (courseComplete && !deferCompletionForNext) {
+    if (courseComplete && !deferCompletionForNext && !videoTabAction) {
       if (!(await cycleStillValid(tab.id))) return;
       await updateRuntime({
         lastActionSummary: '所有视频节已完成',
@@ -1221,18 +1249,20 @@ async function runCycle(trigger, options = {}) {
     const sectionProbe = !settings.dryRun &&
       settings.autoNext &&
       (!quizContext || standaloneQuiz) &&
-      (nextAction || scrollAction || (!snapshot.video?.found && noVideoCount >= 1));
+      (videoTabAction || nextAction || scrollAction || (!snapshot.video?.found && noVideoCount >= 1));
     if (sectionProbe) {
       await sendHud(tab.id, {
         kind: 'watching',
-        text: scrollAction
-          ? '已滚动目录，继续查找下一节…'
-          : nextAction
-            ? '已切换，检查下一节…'
-            : '当前节不是视频，跳过…',
-        detail: scrollAction ? '2 秒后复查' : '短周期复查'
+        text: videoTabAction
+          ? '已切换到视频标签，准备播放…'
+          : scrollAction
+            ? '已滚动目录，继续查找下一节…'
+            : nextAction
+              ? '已切换，检查下一节…'
+              : '当前节不是视频，跳过…',
+        detail: videoTabAction || scrollAction ? '2 秒后复查' : '短周期复查'
       });
-      await scheduleQuizVerify(scrollAction ? 2 : 5, 'section');
+      await scheduleQuizVerify(videoTabAction || scrollAction ? 2 : 5, 'section');
       return;
     }
 

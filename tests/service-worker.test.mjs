@@ -130,7 +130,7 @@ function makeChromeStub({ quiz = false, ended = false, noVideo = false } = {}) {
       onInstalled: { addListener(fn) { listeners.installed.push(fn); } },
       onStartup: { addListener(fn) { listeners.startup.push(fn); } },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getManifest: () => ({ version: '0.4.1' }),
+      getManifest: () => ({ version: '0.5.0' }),
       openOptionsPage: async () => {},
       sendMessage: async () => ({ ok: true })
     },
@@ -601,6 +601,60 @@ test('service worker skips an entire standalone chapter quiz', async () => {
     assert.equal(pressed.length, 0);
     assert.equal(stub.actionLog.length, 1);
     assert.equal(stub.actionLog[0].type, 'next');
+
+    await new Promise((resolve) => {
+      messageListener({ type: 'FF_STOP' }, {}, resolve);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete globalThis.chrome;
+  }
+});
+
+test('service worker opens the video tab before playback', async () => {
+  const stub = makeChromeStub();
+  stub.snapshot.sectionTabs = {
+    detected: true,
+    video: { elementId: 'f0:e9', label: '2 视频', active: false },
+    quiz: { elementId: 'f0:e10', label: '3 章节测验', active: false }
+  };
+  globalThis.chrome = stub.chrome;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('data:')) return originalFetch(url, options);
+    return new Response(JSON.stringify({
+      id: 'mock-tab',
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '{"observation":"视频标签未选中","state":"playing","confidence":0.9,"actions":[]}'
+        }
+      }],
+      usage: { prompt_tokens: 20, completion_tokens: 6, total_tokens: 26 }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const startResponse = await new Promise((resolve) => {
+      messageListener({ type: 'FF_START', tabId: 1 }, {}, resolve);
+    });
+    assert.equal(startResponse.ok, true);
+
+    let runtime;
+    for (let i = 0; i < 60; i += 1) {
+      await sleep(50);
+      runtime = stub.local.get('ff_runtime');
+      if (runtime && runtime.cycleCount >= 1) break;
+    }
+
+    assert.ok(runtime);
+    assert.equal(stub.actionLog.length, 1);
+    assert.equal(stub.actionLog[0].type, 'click');
+    assert.equal(stub.actionLog[0].localId, 'e9');
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);
