@@ -108,6 +108,7 @@ async function rawChatRequest({ settings, messages, maxTokens = 1000, temperatur
     return {
       content,
       payload,
+      finishReason: payload?.choices?.[0]?.finish_reason || '',
       usage: normalizeUsage(payload.usage),
       latencyMs: Date.now() - started,
       requestId: response.headers.get('x-request-id') || payload.id || ''
@@ -176,46 +177,50 @@ export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, run
     }
   ];
 
-  let response = await requestWithJsonFallback({ settings, messages, maxTokens: 1100 });
+  let response = await requestWithJsonFallback({ settings, messages, maxTokens: 1500 });
   let usage = response.usage;
   let repaired = false;
   let decision;
+  let parseError = null;
 
   try {
     decision = parseModelResponse(response.content, { maxActions: settings.maxActions });
   } catch (error) {
+    parseError = error;
     if (!(error instanceof ProtocolError) || repaired) {
-      error.rawContent = response?.content || '';
-      error.requestId = response?.requestId || '';
-      throw error;
-    }
-    repaired = true;
-    const repairMessages = [
-      ...messages,
-      { role: 'assistant', content: truncate(response.content, 4000) },
-      {
-        role: 'user',
-        content: '上一条输出不是合法 JSON。请严格按系统提示的 JSON 结构重新输出；只输出 JSON，不要 Markdown 或解释。'
+      // Keep the raw text for the diagnostics log, but never kill the session
+      // for a malformed model response. A wait decision lets the next cycle
+      // retry; a visible quiz still goes through the deterministic fallback.
+      decision = fallbackDecision(error, response.content);
+    } else {
+      repaired = true;
+      const repairMessages = [
+        ...messages,
+        { role: 'assistant', content: truncate(response.content, 4000) },
+        {
+          role: 'user',
+          content: '上一条输出不是合法 JSON。请严格按系统提示的 JSON 结构重新输出；只输出 JSON，不要 Markdown、思考过程或解释。'
+        }
+      ];
+      const repair = await requestWithJsonFallback({
+        settings,
+        messages: repairMessages,
+        maxTokens: 1400,
+        temperature: 0
+      });
+      usage = {
+        input: usage.input + repair.usage.input,
+        output: usage.output + repair.usage.output,
+        total: usage.total + repair.usage.total
+      };
+      response = { ...repair, latencyMs: response.latencyMs + repair.latencyMs };
+      try {
+        decision = parseModelResponse(repair.content, { maxActions: settings.maxActions });
+        parseError = null;
+      } catch (repairError) {
+        parseError = repairError;
+        decision = fallbackDecision(repairError, repair.content);
       }
-    ];
-    const repair = await requestWithJsonFallback({
-      settings,
-      messages: repairMessages,
-      maxTokens: 900,
-      temperature: 0
-    });
-    usage = {
-      input: usage.input + repair.usage.input,
-      output: usage.output + repair.usage.output,
-      total: usage.total + repair.usage.total
-    };
-    response = { ...repair, latencyMs: response.latencyMs + repair.latencyMs };
-    try {
-      decision = parseModelResponse(repair.content, { maxActions: settings.maxActions });
-    } catch (repairError) {
-      repairError.rawContent = repair.content || '';
-      repairError.requestId = repair.requestId || '';
-      throw repairError;
     }
   }
 
@@ -226,7 +231,26 @@ export async function analyzeWithAI({ settings, snapshot, screenshotDataUrl, run
     latencyMs: response.latencyMs,
     model: settings.model,
     requestId: response.requestId,
-    repaired
+    finishReason: response.finishReason || '',
+    repaired,
+    parseError: parseError ? truncate(String(parseError.message || parseError), 300) : '',
+    rawContent: response.content
+  };
+}
+
+function fallbackDecision(error, rawContent) {
+  return {
+    observation: '模型输出无法解析',
+    state: 'unknown',
+    confidence: 0,
+    reason: `模型返回不是合法 JSON：${truncate(String(error?.message || error), 200)}`,
+    courseComplete: false,
+    quiz: { detected: false, correct: null },
+    actions: [{ type: 'wait', seconds: 8 }],
+    warnings: [
+      '模型输出无法解析，已进入自动重试等待；不会要求人工确认。',
+      `raw: ${truncate(rawContent || '', 300)}`
+    ]
   };
 }
 

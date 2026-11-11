@@ -77,6 +77,30 @@ test('sends an OpenAI-compatible image message and parses the decision', async (
   }
 });
 
+test('returns a wait decision instead of throwing on malformed model JSON', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return okResponse('这不是 JSON，只是模型的思考过程。');
+  };
+
+  try {
+    const result = await analyzeWithAI({
+      settings: settings(),
+      snapshot: snapshot(),
+      screenshotDataUrl: 'data:image/jpeg;base64,AAAA',
+      runtime: { startedAt: Date.now(), cycleCount: 0, history: [] }
+    });
+    assert.equal(calls, 2);
+    assert.ok(result.parseError);
+    assert.equal(result.decision.actions[0].type, 'wait');
+    assert.match(result.decision.reason, /不是合法 JSON/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('retries without response_format when a gateway rejects it', async () => {
   const originalFetch = globalThis.fetch;
   const bodies = [];
