@@ -413,8 +413,21 @@ export function buildActionPlan({ decision, snapshot, settings }) {
         break;
       }
       case 'scroll_at': {
+        if (quizDetected && !standaloneQuiz) {
+          warnings.push('答题界面存在时禁止滚动页面，避免遮住选项。');
+          continue;
+        }
         if (snapshot?.video?.found && !videoNearEnd(snapshot)) {
           warnings.push('视频尚未播放完，目录滚动已忽略。');
+          continue;
+        }
+        const scrollTarget = String(action.target || '');
+        const scrollX = Number(action.x) || 0;
+        if (
+          !/目录|章节|侧边|sidebar|catalog/i.test(scrollTarget) ||
+          (action.bbox && scrollX > 0 && scrollX < 0.52)
+        ) {
+          warnings.push('只允许滚动右侧目录区域，整页滚动已拒绝。');
           continue;
         }
         if (!settings.autoNext) {

@@ -2,6 +2,18 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.6.2] - 2026-11-02
+
+### Fixed
+
+- The extension no longer scrolls the whole page to find the next section.
+  Coordinate scrolling is restricted to the right-hand directory container;
+  if no inner scrollable container exists it refuses to scroll.
+- Scrolling is rejected while an in-video quiz is visible, so answer options
+  cannot be pushed off-screen.
+- Element clicks use `scrollIntoView({ block: 'nearest' })` to minimize layout
+  movement instead of centering the whole page.
+
 ## [0.6.1] - 2026-11-02
 
 ### Fixed
