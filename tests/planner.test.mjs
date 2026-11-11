@@ -412,10 +412,30 @@ test('visual numbered section clicks are treated as next and blocked before the 
   assert.match(plan.warnings.join(' '), /尚未播放完/);
 });
 
+test('scrolling the whole page or scrolling during a quiz is rejected', () => {
+  const snapshot = makeSnapshot();
+  snapshot.video.ended = true;
+  snapshot.video.currentTime = snapshot.video.duration;
+  snapshot.quiz.detected = true;
+  const plan = buildActionPlan({
+    decision: makeDecision([{
+      type: 'scroll_at',
+      bbox: [0.3, 0.3, 0.6, 0.8],
+      target: '页面下方',
+      deltaY: 800
+    }], { state: 'quiz' }),
+    snapshot,
+    settings: makeSettings({ clickMode: 'vision' })
+  });
+  assert.equal(plan.actions.length, 0);
+  assert.match(plan.warnings.join(' '), /禁止滚动|只允许滚动右侧目录/);
+});
+
 test('pure vision allows a coordinate scroll to reveal the directory', () => {
   const snapshot = makeSnapshot();
   snapshot.video.ended = true;
   snapshot.video.currentTime = snapshot.video.duration;
+  snapshot.quiz.detected = false;
   const plan = buildActionPlan({
     decision: makeDecision([{
       type: 'scroll_at',

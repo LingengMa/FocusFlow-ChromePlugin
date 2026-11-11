@@ -522,7 +522,7 @@
 
   function fireClick(element) {
     try {
-      element.scrollIntoView({ block: 'center', inline: 'center' });
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } catch {
       // ignore
     }
@@ -726,16 +726,9 @@
       return /(auto|scroll|overlay)/.test(style.overflowY) &&
         node.scrollHeight > node.clientHeight + 30;
     });
-    const inner = scrollable.find((node) =>
+    return scrollable.find((node) =>
       node.getBoundingClientRect().left > window.innerWidth * 0.45
-    ) || scrollable[0];
-    if (inner) return inner;
-
-    // Some platforms let the whole document scroll instead of giving the
-    // directory its own scrollbar. Fall back to the page scroller.
-    const root = document.scrollingElement || document.documentElement;
-    if (root && root.scrollHeight > root.clientHeight + 30) return root;
-    return null;
+    ) || scrollable[0] || null;
   }
 
   function collectSidebarItems(selector) {
@@ -1255,8 +1248,9 @@
       }
       node = node.parentElement;
     }
-    window.scrollBy(0, amount);
-    return { ok: true, detail: `已滚动页面 ${amount}px` };
+    // Never scroll the whole document: doing so hides quiz/sidebar options and
+    // breaks coordinate clicks. Only scroll an inner container.
+    return { ok: false, error: '坐标位置没有可滚动的目录容器，已拒绝滚动整页。' };
   }
 
   function clickAtPoint(x, y, text = '') {

@@ -130,7 +130,7 @@ function makeChromeStub({ quiz = false, ended = false, noVideo = false } = {}) {
       onInstalled: { addListener(fn) { listeners.installed.push(fn); } },
       onStartup: { addListener(fn) { listeners.startup.push(fn); } },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getManifest: () => ({ version: '0.6.1' }),
+      getManifest: () => ({ version: '0.6.2' }),
       openOptionsPage: async () => {},
       sendMessage: async () => ({ ok: true })
     },
