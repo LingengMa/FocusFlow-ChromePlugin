@@ -33,6 +33,16 @@ test('parses fenced JSON with surrounding prose', () => {
   assert.equal(decision.quiz.question, '1+1=?');
 });
 
+test('extracts JSON from reasoning text and tolerates trailing commas', () => {
+  const text = `先分析一下页面。
+{"observation":"视频在播放","state":"playing","confidence":0.8,
+ "reason":"正常","actions":[],}
+然后继续观察。`;
+  const decision = parseModelResponse(text, { maxActions: 4 });
+  assert.equal(decision.state, 'playing');
+  assert.equal(decision.actions.length, 0);
+});
+
 test('accepts a singular action field and percent confidence', () => {
   const decision = normalizeDecision({
     state: 'paused',

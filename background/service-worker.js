@@ -1035,7 +1035,9 @@ async function runCycle(trigger, options = {}) {
           latencyMs: ai.latencyMs,
           usage: ai.usage,
           requestId: ai.requestId,
+          finishReason: ai.finishReason || '',
           repaired: Boolean(ai.repaired),
+          parseError: ai.parseError || '',
           rawContent: String(ai.content || '')
         },
         decision,
@@ -1315,6 +1317,16 @@ async function runCycle(trigger, options = {}) {
         reason: cadence.reason || '答题多次复查仍未通过，请手动检查。',
         notifyUser: true
       });
+      return;
+    }
+
+    if (ai.parseError && cadence.mode === 'normal' && !quizContext) {
+      await sendHud(tab.id, {
+        kind: 'watching',
+        text: '模型输出异常，已安排自动重试',
+        detail: '解析失败，不会要求人工确认'
+      });
+      await scheduleQuizVerify(20, 'section');
       return;
     }
 

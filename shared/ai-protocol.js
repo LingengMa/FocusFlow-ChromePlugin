@@ -193,23 +193,62 @@ function normalizeBbox(raw, warnings) {
   };
 }
 
+function balancedObjects(text) {
+  const out = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        out.push(text.slice(start, index + 1));
+        start = -1;
+      }
+      if (depth < 0) depth = 0;
+    }
+  }
+  return out;
+}
+
+function sanitizeJson(candidate) {
+  return String(candidate || '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/,\s*([}\]])/g, '$1')
+    .trim();
+}
+
 function objectFromText(text) {
   const input = String(text || '').trim();
   if (!input) throw new ProtocolError('模型返回为空。');
 
-  const withoutFence = input
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-
-  const candidates = [withoutFence];
-  const first = withoutFence.indexOf('{');
-  const last = withoutFence.lastIndexOf('}');
-  if (first >= 0 && last > first) candidates.push(withoutFence.slice(first, last + 1));
+  const cleaned = sanitizeJson(input);
+  const candidates = [cleaned, ...balancedObjects(cleaned).reverse()];
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first >= 0 && last > first) candidates.push(cleaned.slice(first, last + 1));
 
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate);
+      const parsed = JSON.parse(sanitizeJson(candidate));
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
     } catch {
       // Try the next candidate.

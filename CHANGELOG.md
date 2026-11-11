@@ -2,6 +2,22 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.6.1] - 2026-11-02
+
+### Fixed
+
+- Malformed model output no longer fails the cycle with “模型返回不是合法 JSON”.
+  The parser now extracts balanced JSON objects from reasoning text and tolerates
+  trailing commas.
+- Added a repair request with larger token budgets; if parsing still fails, the
+  extension records the raw response and returns a safe `wait` decision instead
+  of stopping. A visible quiz still goes through deterministic option fallback.
+- Added an automatic retry when parsing failed and no quiz was detected.
+
+### Added
+
+- `finishReason`, `parseError` and raw response are included in diagnostic logs.
+
 ## [0.6.0] - 2026-11-02
 
 ### Changed
