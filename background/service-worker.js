@@ -9,7 +9,13 @@ import {
 } from '../shared/defaults.js';
 import { describeAction, truncate } from '../shared/ai-protocol.js';
 import { buildActionPlan, summarizePlan } from '../shared/planner.js';
-import { nextQuizCadence } from '../shared/quiz-followup.js';
+import { isQuizAnswerAction, nextQuizCadence } from '../shared/quiz-followup.js';
+import {
+  buildQuizFallback,
+  normalizeChoiceLabel,
+  quizSignature,
+  selectedQuizLabels
+} from '../shared/quiz-fallback.js';
 import { hasNextAction, looksCourseComplete, shouldSynthesizeNext } from '../shared/course-state.js';
 import { looksLikeCoursePage } from '../shared/course-detect.js';
 import {
@@ -871,6 +877,67 @@ async function runCycle(trigger, options = {}) {
       plan.haltAfterMessage = '';
       plan.warnings.push('检测到“学习目标/视频/章节测验”标签页，先切换到视频标签。');
     }
+    const currentQuizSignature = quizSignature(snapshot);
+    const sameQuiz = runtime.quizSignature === currentQuizSignature;
+    const quizAttempts = sameQuiz && Array.isArray(runtime.quizAttemptedOptions)
+      ? runtime.quizAttemptedOptions
+      : [];
+    const quizRound = sameQuiz ? Number(runtime.quizOptionRound) || 0 : 0;
+    let quizFallback = null;
+    let plannedQuizLabels = selectedQuizLabels(plan, snapshot);
+
+    // Never stop at an answer confirmation. If the model did not produce an
+    // option (or repeats an already-tried one), choose the next untried option
+    // from the page structure and submit it.
+    if (settings.autoAnswer && settings.autoSubmit && quizContext && !standaloneQuiz && !videoTabAction) {
+      const attempted = new Set(quizAttempts.map(normalizeChoiceLabel));
+      const repeatsOnly = plannedQuizLabels.length > 0 &&
+        plannedQuizLabels.every((label) => attempted.has(normalizeChoiceLabel(label)));
+      const hasAnswer = plan.actions.some((action) =>
+        isQuizAnswerAction(action, snapshot, decision)
+      );
+      const submitWithoutSelection = plannedQuizLabels.length === 0 &&
+        plan.actions.some((action) => action.type === 'submit');
+      if (!hasAnswer || repeatsOnly || submitWithoutSelection) {
+        const fallback = buildQuizFallback({
+          snapshot,
+          runtime: {
+            ...runtime,
+            quizSignature: currentQuizSignature,
+            quizAttemptedOptions: quizAttempts,
+            quizOptionRound: quizRound
+          }
+        });
+        if (fallback?.actions) {
+          plan.actions = fallback.actions;
+          plan.needsUser = false;
+          plan.message = '';
+          plan.haltAfterMessage = '';
+          plan.warnings.push(fallback.reason);
+          quizFallback = fallback;
+          plannedQuizLabels = selectedQuizLabels(plan, snapshot);
+        }
+      }
+    }
+
+    if (
+      settings.autoSubmit &&
+      quizContext &&
+      !standaloneQuiz &&
+      !plan.actions.some((action) => action.type === 'submit') &&
+      plannedQuizLabels.length > 0
+    ) {
+      const submit = (snapshot.quiz?.submitCandidates || []).find((item) => item.elementId);
+      const submitEntry = submit ? snapshot.elementIndex?.get(submit.elementId) : null;
+      plan.actions.push({
+        type: 'submit',
+        elementId: submit?.elementId || '',
+        frameId: submitEntry?.frameId ?? snapshot.quiz?.frameId ?? 0,
+        localId: submitEntry?.localId || ''
+      });
+      plan.warnings.push('已选择答案，自动提交。');
+    }
+
     const visionScrollCount = Number(runtime.visionScrollCount) || 0;
     const noVideoReady = standaloneQuiz || noVideoCount >= 2;
     const wantsNext = videoEnded || (noVideo && noVideoReady);
@@ -984,7 +1051,12 @@ async function runCycle(trigger, options = {}) {
           visionScrollCount,
           courseComplete,
           standaloneQuiz,
-          wantsNext
+          wantsNext,
+          quizAttempts,
+          plannedQuizLabels,
+          quizFallback: quizFallback
+            ? { selectedLabel: quizFallback.selectedLabel, round: quizFallback.round }
+            : null
         },
         settings: {
           model: settings.model,
@@ -1128,6 +1200,10 @@ async function runCycle(trigger, options = {}) {
         visionScrollCount,
         nextAction,
         scrollAction,
+        quizAttempts: runtime.quizAttemptedOptions || [],
+        quizFallback: quizFallback
+          ? { selectedLabel: quizFallback.selectedLabel, round: quizFallback.round }
+          : null,
         selfHeal: runtime.lastSelfHeal || null
       });
     }
@@ -1190,6 +1266,11 @@ async function runCycle(trigger, options = {}) {
       quizVerifyArmed: cadence.armed,
       quizRetryCount: cadence.count,
       quizVerifyAt: null,
+      quizSignature: quizContext ? currentQuizSignature : '',
+      quizAttemptedOptions: quizContext
+        ? [...new Set([...quizAttempts, ...plannedQuizLabels])].slice(-40)
+        : [],
+      quizOptionRound: quizContext ? (quizFallback?.round ?? quizRound) : 0,
       noVideoCount: nextAction || snapshot.video?.found ? 0 : noVideoCount,
       visionScrollCount: scrollAction
         ? visionScrollCount + 1
