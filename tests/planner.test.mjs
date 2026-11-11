@@ -220,14 +220,15 @@ test('DOM click on a quiz option retains the quiz group for verification', () =>
   assert.equal(plan.actions[0].group, 'quiz');
 });
 
-test('low confidence turns an answer into a human confirmation', () => {
+test('low confidence still attempts an answer without human confirmation', () => {
   const plan = buildActionPlan({
     decision: makeDecision([{ type: 'choose', elementId: 'f0:e2' }], { confidence: 0.4 }),
     snapshot: makeSnapshot(),
     settings: makeSettings()
   });
-  assert.equal(plan.needsUser, true);
-  assert.match(plan.message, /置信度/);
+  assert.equal(plan.needsUser, false);
+  assert.equal(plan.actions.length, 1);
+  assert.equal(plan.actions[0].type, 'choose');
 });
 
 test('auto-submit off selects answers but stops before submitting', () => {

@@ -2,6 +2,7 @@ import './config.test.mjs';
 import './ai-protocol.test.mjs';
 import './planner.test.mjs';
 import './quiz-followup.test.mjs';
+import './quiz-fallback.test.mjs';
 import './course-state.test.mjs';
 import './course-detect.test.mjs';
 import './prompt.test.mjs';

@@ -65,13 +65,15 @@ export function nextQuizCadence({ snapshot, decision, plan, runtime, settings })
     }
 
     const nextCount = count + 1;
-    if (nextCount > QUIZ_MAX_VERIFY) {
+    const optionCount = Array.isArray(snapshot?.quiz?.choices) ? snapshot.quiz.choices.length : 0;
+    const maxVerify = Math.max(QUIZ_MAX_VERIFY, optionCount * 2 + 4);
+    if (nextCount > maxVerify) {
       return {
         mode: 'stop',
         armed: false,
         count: 0,
         answered,
-        reason: '答题多次复查仍未通过，已停止自动提交。请手动检查。'
+        reason: '所有选项已循环尝试仍未通过，已停止自动提交。请手动检查。'
       };
     }
 

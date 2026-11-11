@@ -130,7 +130,7 @@ function makeChromeStub({ quiz = false, ended = false, noVideo = false } = {}) {
       onInstalled: { addListener(fn) { listeners.installed.push(fn); } },
       onStartup: { addListener(fn) { listeners.startup.push(fn); } },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getManifest: () => ({ version: '0.5.0' }),
+      getManifest: () => ({ version: '0.6.0' }),
       openOptionsPage: async () => {},
       sendMessage: async () => ({ ok: true })
     },
@@ -493,7 +493,7 @@ test('service worker stops with completed status when the course is finished', a
 });
 
 test('service worker maps a visual bbox to a CDP click', async () => {
-  const stub = makeChromeStub({ quiz: true });
+  const stub = makeChromeStub();
   globalThis.chrome = stub.chrome;
 
   const originalFetch = globalThis.fetch;
@@ -705,6 +705,56 @@ test('service worker clicks a normal page button through DOM structure', async (
     assert.equal(stub.actionLog.length, 1);
     assert.equal(stub.actionLog[0].type, 'click');
     assert.equal(stub.actionLog[0].localId, 'e9');
+
+    await new Promise((resolve) => {
+      messageListener({ type: 'FF_STOP' }, {}, resolve);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete globalThis.chrome;
+  }
+});
+
+test('service worker auto-selects an untried quiz option when the AI gives none', async () => {
+  const stub = makeChromeStub({ quiz: true });
+  globalThis.chrome = stub.chrome;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('data:')) return originalFetch(url, options);
+    return new Response(JSON.stringify({
+      id: 'mock-quiz-fallback',
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: '{"observation":"题目不太确定","state":"quiz","confidence":0.2,"reason":"低置信度但必须尝试","quiz":{"detected":true},"actions":[]}'
+        }
+      }],
+      usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const startResponse = await new Promise((resolve) => {
+      messageListener({ type: 'FF_START', tabId: 1 }, {}, resolve);
+    });
+    assert.equal(startResponse.ok, true);
+
+    let runtime;
+    for (let i = 0; i < 60; i += 1) {
+      await sleep(50);
+      runtime = stub.local.get('ff_runtime');
+      if (runtime && runtime.cycleCount >= 1) break;
+    }
+
+    assert.ok(runtime);
+    assert.equal(stub.actionLog.length >= 2, true);
+    assert.equal(stub.actionLog[0].type, 'choose');
+    assert.equal(stub.actionLog[1].type, 'submit');
+    assert.equal(runtime.quizAttemptedOptions.length >= 1, true);
 
     await new Promise((resolve) => {
       messageListener({ type: 'FF_STOP' }, {}, resolve);

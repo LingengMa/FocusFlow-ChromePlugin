@@ -2,6 +2,23 @@
 
 All notable changes to FocusFlow are recorded here.
 
+## [0.6.0] - 2026-11-02
+
+### Changed
+
+- Removed confidence gating from quiz answering. A low-confidence model decision
+  is still executed; the extension no longer stops for manual answer confirmation.
+- Automatic option coverage: the model's choice is recorded, and if it is absent,
+  repeats an already-tried option, or only submits without selecting, the
+  extension selects the next untried option from the page structure and submits.
+- After all options are tried, two additional retry rounds are attempted.
+- Auto-submit is enforced for a selected answer when auto-submit is enabled.
+
+### Added
+
+- Runtime quiz attempt tracking (`quizSignature`, `quizAttemptedOptions`,
+  `quizOptionRound`) and diagnostics in the log.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added

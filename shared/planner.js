@@ -138,15 +138,6 @@ export function buildActionPlan({ decision, snapshot, settings }) {
       continue;
     }
 
-    if (action.type === 'choose' || action.type === 'type' || action.type === 'submit') {
-      if (decision.confidence < threshold) {
-        return needsHuman(
-          `AI 对答案的置信度只有 ${Math.round(decision.confidence * 100)}%，低于阈值 ${Math.round(threshold * 100)}%。请手动确认。`,
-          { blocked, warnings }
-        );
-      }
-    }
-
     if (action.type === 'next' && decision.confidence < Math.max(0.5, threshold - 0.2)) {
       return needsHuman(
         `AI 对“下一节”的判断置信度较低（${Math.round(decision.confidence * 100)}%），请手动确认。`,
@@ -376,12 +367,6 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           if (!settings.autoAnswer) {
             return needsHuman(policyMessage('自动答题已关闭', decision), { blocked, warnings });
           }
-          if (decision.confidence < threshold) {
-            return needsHuman(
-              `AI 对“提交”的置信度只有 ${Math.round(decision.confidence * 100)}%，低于阈值。请手动确认。`,
-              { blocked, warnings }
-            );
-          }
           if (!settings.autoSubmit) {
             haltAfterMessage = policyMessage('自动提交已关闭', decision);
             continue;
@@ -393,12 +378,6 @@ export function buildActionPlan({ decision, snapshot, settings }) {
           if (!quizDetected) {
             warnings.push('未检测到答题界面，视觉答案点击已忽略。');
             continue;
-          }
-          if (decision.confidence < threshold) {
-            return needsHuman(
-              `AI 对答案的置信度只有 ${Math.round(decision.confidence * 100)}%，低于阈值。请手动确认。`,
-              { blocked, warnings }
-            );
           }
         } else if (decision.confidence < 0.5) {
           return needsHuman(
@@ -429,12 +408,6 @@ export function buildActionPlan({ decision, snapshot, settings }) {
         }
         if (!settings.autoAnswer) {
           return needsHuman(policyMessage('自动答题已关闭', decision), { blocked, warnings });
-        }
-        if (decision.confidence < threshold) {
-          return needsHuman(
-            `AI 对答案的置信度只有 ${Math.round(decision.confidence * 100)}%，低于阈值。请手动确认。`,
-            { blocked, warnings }
-          );
         }
         actions.push({ ...action });
         break;
